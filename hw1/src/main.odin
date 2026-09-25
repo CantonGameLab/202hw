@@ -11,9 +11,13 @@ main :: proc() {
 	render.InitATriangle()
 
 	for {
+	
+		// Just a simpe s3 event module that copy from my another project
+
 		if event.Poll() {
 			break
 		}
+		
 		render.Render()
 	}
 	return 
