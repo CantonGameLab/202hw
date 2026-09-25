@@ -2,6 +2,10 @@
 
 out vec4 FragColor;
 
+uniform vec2 resolution;
+
 void main() {
-	FragColor = vec4(gl_FragCoord.xyz, 1.0);
+	vec2 normalize_uv = gl_FragCoord.xy / resolution;
+
+	FragColor = vec4(normalize_uv, normalize_uv);
 }

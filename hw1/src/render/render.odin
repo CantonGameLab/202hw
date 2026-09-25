@@ -11,13 +11,19 @@ INIT_WINDOW_WIDTH :: 1920
 INIT_WINDOW_HEIGHT :: 1080
 INIT_WINDOW_TITLE :: "CERenderer"
 
+TriangleProgram :: struct {
+	program : u32,
+	vs : u32,
+	fs : u32,
+	resolution_location : i32,
+}
+
 window : ^s3.Window
 gl_context : s3.GLContext
 vbo : u32
 vao : u32
-vs : u32
-fs : u32
-program : u32
+
+triangle_program : TriangleProgram
 
 InitATriangle :: proc() {
 	vertices := []f32{-.3, -.3, .3, .3, -.3, .3}
@@ -32,10 +38,12 @@ InitATriangle :: proc() {
 	gl.VertexAttribPointer(0, 2, gl.FLOAT, false, 2 * size_of(f32), 0)
 	gl.EnableVertexAttribArray(0)
 
-	vs = compileShader(gl.VERTEX_SHADER, "resource/shaders/first_vertex.glsl")
-	fs = compileShader(gl.FRAGMENT_SHADER, "resource/shaders/first_fragment.glsl")
+	triangle_program.vs = compileShader(gl.VERTEX_SHADER, "resource/shaders/first_vertex.glsl")
+	triangle_program.fs = compileShader(gl.FRAGMENT_SHADER, "resource/shaders/first_fragment.glsl")
 	
-	program = linkProgram(vs, fs)
+	triangle_program.program = linkProgram(triangle_program.vs, triangle_program.fs)
+
+	triangle_program.resolution_location = gl.GetUniformLocation(triangle_program.program, cstring("resolution"))
 
 }
 
@@ -54,12 +62,17 @@ Render :: proc() {
 	gl.ClearColor(0.07, 0.09, 0.12, 1)
 	gl.Clear(gl.COLOR_BUFFER_BIT)
 
-	gl.UseProgram(program)
-	gl.BindVertexArray(vao)
+	gl.UseProgram(triangle_program.program)
+
+	gl.Uniform2f(triangle_program.resolution_location, f32(w), f32(h))
+
+	gl.BindVertexArray(vao) 
 	gl.DrawArrays(gl.TRIANGLES, 0, 3)
 
-
 	s3.GL_SwapWindow(window)
+
+	
+
 }
 
 linkProgram :: proc(vs : u32, fs : u32) -> (program : u32) {
