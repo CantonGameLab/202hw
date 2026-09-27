@@ -4,8 +4,10 @@ import s3 "vendor:sdl3"
 
 quit_requested: bool
 
-// 派发**单个**事件(阻塞式主循环用:WaitEventTimeout 拿到的首个事件交给这里)。
-// Update 与主循环共用本函数 —— 事件类型的判定只此一处,不重复。
+// Dispatch a *single* event (used by the blocking main loop: the first event
+// returned by WaitEventTimeout is handed to this).
+// Both Update and the main loop share this proc -- event type classification
+// lives here and only here, never duplicated.
 Dispatch :: proc(e: ^s3.Event) {
 	#partial switch e.type {
 	case .QUIT, .WINDOW_CLOSE_REQUESTED:
@@ -13,7 +15,8 @@ Dispatch :: proc(e: ^s3.Event) {
 	}
 }
 
-// 轮询并应用全部事件;返回 true = 请求退出(兼容旧名)
+// Poll and apply every pending event; returns true = quit requested
+// (the old name is kept for compatibility).
 Poll :: proc() -> (quit: bool) {
 	for e: s3.Event; s3.PollEvent(&e); {
 		Dispatch(&e)
@@ -21,7 +24,7 @@ Poll :: proc() -> (quit: bool) {
 	return quit_requested
 }
 
-// 退出请求(窗口关闭/QUIT)
+// Quit requested (window close / QUIT).
 QuitRequested :: proc() -> bool {
 	return quit_requested
 }

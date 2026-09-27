@@ -6,16 +6,8 @@ import gl "vendor:OpenGL"
 import me "../memory/"
 
 
-TextureTransform :: struct {
-	offset : [2]f32,
-	rotation : f32,
-	scale : [2]f32,
-	has_texcoord : b8,
-	texcoord : i32,
-}
-
 Transform :: struct {
-	matrix_ : matrix[4,4]f16
+	matrix_ : matrix[4,4]f32
 }
 
 
@@ -33,13 +25,19 @@ Texture :: struct {
 	wrap_t : gl.GL_Enum,
 }
 
-TextureView :: struct {
+// This project's own enum, deliberately not cgltf.alpha_mode.
+// Zero value = Opaque = the spec default (schema: "default": "OPAQUE"),
+// so Material{} is a safe empty state.
+AlphaMode :: enum {
+	Opaque,
+	Mask,
+	Blend,
+}
 
-	texture_id : u32,
-	texcoord : i32,
-	scale : f32,
-	has_texture_transform : b8,
-	texture_transform : TextureTransform,
+TextureView :: struct {
+	texture_id : u32,   // 0 = this slot has no texture (RefLoad hands out ids from 1, so 0 is naturally empty)
+	texcoord   : i32,   // which UV set to use (the n in TEXCOORD_n)
+	scale      : f32,   // meaningful only for normalTexture(scale) / occlusionTexture(strength); spec default 1.0
 }
 
 PBRMaterial :: struct {
@@ -56,7 +54,14 @@ Material :: struct {
 	emissive_texture : TextureView,
 	emissive_factor : [3]f32,
 
-	has_pbr : b8,
+	alpha_mode : AlphaMode,
+	alpha_cutoff : f32,
+	double_sided : b8,
+
+	// glTF's material.pbrMetallicRoughness is *optional*, and when it is omitted
+	// every default value applies; baseColorFactor and friends physically live
+	// inside it, so "is this PBR?" is not a question that can be asked.
+	// => there is no has_pbr flag.
 	using pbr : PBRMaterial,
 }
 
@@ -84,9 +89,7 @@ Mesh :: struct {
 
 Node :: struct {
 	mesh_id : u32,
-	transform : Transform,
-	father_id : u32,
-	son_ids : [dynamic]u32,
+	transform : Transform, //there is no the suck NODE TREE. It is evil for any game developer otherwise you are A masochism
 }
 
 MAX_NODE_COUNT :: 2000
@@ -94,11 +97,8 @@ MAX_MESH_COUNT :: 10000
 MAX_TEXTURE_COUNT :: 10000
 MAX_MATERIAL_COUNT :: 10000
 
-nodes : me.RefCounted(MAX_NODE_COUNT, Node)
-
 meshes : me.RefCounted(MAX_MESH_COUNT, Mesh)
-
 textures : me.RefCounted(MAX_TEXTURE_COUNT, Texture)
-
 materials : me.RefCounted(MAX_MATERIAL_COUNT, Material)
+
 
