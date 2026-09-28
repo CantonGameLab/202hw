@@ -151,7 +151,7 @@ RefUnload :: proc(rc : ^RefCounted($N, $T), id : u32) -> b8 {
 }
 
 RefRetain :: proc(rc : ^RefCounted($N, $T), id : u32) -> b8 {
-	if id >= N || !rc.on_load[id] {
+	if id >= N || !rc.on_load[id] || rc.refs[id] <= 0 {
 		return false
 	}
 	rc.refs[id] += 1
