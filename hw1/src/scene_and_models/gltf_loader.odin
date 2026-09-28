@@ -18,7 +18,49 @@ LoadResult :: enum {
 	NoImageSource,
 }
 
-LoadaGLTF :: proc(path : string) -> (ret : LoadResult) {
+// Load-time translation tables: glTF array index -> pool id, one table per pass.
+//
+// Why these live at package scope instead of being Locals of LoadaGLTF:
+// the node pass runs inside a recursive DFS, and an Odin nested proc CANNOT read
+// an outer proc's locals (measured: "Undeclared name"). Serving the DFS through a
+// parameter would work, but a parameter list would then have to carry a table that
+// is pure loader bookkeeping -- so package scope is the smaller lie.
+//
+// They have to be package-level anyway because the ARRAY SIZE depends on the file
+// being loaded: a local `make()` is the only way to size them per file, which is
+// exactly what a nested proc cannot see. So they are fixed-size instead, and
+// "table is too small for this file" becomes an explicit load failure below
+// rather than a silent out-of-bounds write.
+//
+// Values are 0 outside [0, len) covers: 0 means "no such glTF index" everywhere
+// (RefLoad hands out ids from 1), so a stale entry can only ever be wrong in a
+// way this file's own loops cannot reach.
+MAX_GLTF_TEXTURE_MAP :: 1024
+MAX_GLTF_MATERIAL_MAP :: 1024
+
+texture_ids_from_gltf_file_to_the_real_array : [MAX_GLTF_TEXTURE_MAP]u32
+material_ids_from_gltf_file_to_the_real_array : [MAX_GLTF_MATERIAL_MAP]u32
+
+// One glTF file yields exactly one Mesh, so this is a single slot rather than a
+// table. Every primitive that file produces, from every node that references the
+// mesh, lands inside that one Mesh record's `primitives` slice.
+the_mesh_id_from_gltf_file_to_the_real_array : u32
+
+// Loads a glTF into the pools and hands back the pool id of the one Mesh it
+// produced.
+//
+// Granularity contract: ONE glTF FILE == ONE MESH. A file describing 2 or more
+// glTF meshes is rejected outright -- it is a file that was not preprocessed into
+// this project's shape (data/assets/coast_line originally shipped LOD0..LOD3 as
+// four meshes and was reduced to one before it got here). Merging them at load
+// time would be the wrong fix: node transforms differ per mesh and a Mesh record
+// has nowhere to put more than one.
+//
+// The mesh id is returned WITHOUT a retain on it, and that is deliberate: nothing
+// inside the loader owns the result, the caller does. The caller is expected to
+// retain it once -- which is also why the end-of-load sweep must never unload a
+// mesh.
+LoadAGLTFToAMesh :: proc(path : string) -> (mesh_id : u32, ret : LoadResult) {
 	cpath := strings.clone_to_cstring(path)
 	defer delete(cpath)
 	data, result := cgltf.parse_file(cgltf.options{},cpath)
@@ -60,10 +102,31 @@ LoadaGLTF :: proc(path : string) -> (ret : LoadResult) {
 		return
 	}
 
+	// Everything the two lookup tables can index must fit their table.
+	// Checked up front so a smaller-than-the-file table fails loudly here instead
+	// of writing past the end of a package-level array 200 lines later.
+	if len(data.textures) > MAX_GLTF_TEXTURE_MAP ||
+	   len(data.materials) > MAX_GLTF_MATERIAL_MAP {
+		fmt.eprintln("[x] glTF has more of something than its lookup table can hold:",
+			"textures", len(data.textures), "/", MAX_GLTF_TEXTURE_MAP,
+			"materials", len(data.materials), "/", MAX_GLTF_MATERIAL_MAP, ":", path)
+		ret = .ItJustFailed
+		return
+	}
+
+	// The one-glTF-one-Mesh contract. Reject rather than merge: several glTF meshes
+	// in one file means the file carries its own per-mesh transforms, and folding
+	// them together is a decision about the model, not about loading it.
+	if len(data.meshes) != 1 {
+		fmt.eprintln("[x] glTF does not have exactly one mesh (this loader is one-glTF-one-Mesh):",
+			len(data.meshes), "meshes in", path)
+		ret = .ItJustFailed
+		return
+	}
+
 	//Load the textures
 
-	texture_ids_from_gltf_file_to_the_real_array : []u32 = make([]u32, len(data.textures))
-	defer delete(texture_ids_from_gltf_file_to_the_real_array)
+	texture_ids_from_gltf_file_to_the_real_array = {}
 
 	
 	for index in 0..<len(data.textures) {
@@ -169,8 +232,7 @@ LoadaGLTF :: proc(path : string) -> (ret : LoadResult) {
 
 	//Load the materials
 
-	material_ids_from_gltf_file_to_the_real_array : []u32 = make([]u32, len(data.materials))
-	defer delete(material_ids_from_gltf_file_to_the_real_array)
+	material_ids_from_gltf_file_to_the_real_array = {}
 
 	for index in 0..<len(data.materials) {
 		m := &data.materials[index]
@@ -211,20 +273,22 @@ LoadaGLTF :: proc(path : string) -> (ret : LoadResult) {
 			return
 		}
 
+		// The material's five texture edges were already retained by the
+		// readTextureView calls that built it, one edge per call. There is nothing
+		// left to retain here -- this material record going into the pool is not
+		// itself an edge, nothing holds it yet at this point.
+
 		material_ids_from_gltf_file_to_the_real_array[index] = pool_id
 	}
 
-	//Load the meshes (and the primitives that strictly belong to them)
+	//Load the one mesh (and the primitives that strictly belong to it)
 
-	for index in 0..<len(data.meshes) {
-		gm := &data.meshes[index]
-
-		prims := make([]Primitive, len(gm.primitives))
-		// WARNING: no `defer delete(prims)` here. A defer would also fire at the end
-		// of every outer iteration, including the successful one, but on success
-		// ownership has already moved to the mesh record => double free.
-		// The success path's delete belongs to the mesh's lifetime; each failure
-		// path deletes explicitly.
+	// Everything the file produces goes into this one slice, so it is allocated
+	// once here and grown by append while walking the nodes below. No `defer
+	// delete(prims)`: on success the mesh record owns the backing array, and the
+	// mesh's lifetime is what releases it. Each failure path below deletes
+	// explicitly instead.
+	prims := make([dynamic]Primitive)
 
 		for pi in 0..<len(gm.primitives) {
 			gp := &gm.primitives[pi]
@@ -458,6 +522,51 @@ LoadaGLTF :: proc(path : string) -> (ret : LoadResult) {
 		}
 		// Ownership of prims has moved into the mesh record; it must not be deleted
 		// here -- the mesh's lifetime owns that.
+
+		// One retain per primitive: each primitive is its own edge to its material,
+		// not the mesh holding one edge on behalf of all of them. Two primitives of
+		// one mesh sharing a material therefore count as two, which is what makes
+		// releasing per primitive the exact inverse.
+		for &p in mesh.primitives {
+			if p.material_id != 0 {
+				if !me.RefRetain(&materials, p.material_id) {
+					fmt.eprintln("[x] failed to retain material while registering a mesh, material pool id:", p.material_id)
+				}
+			}
+		}
+
+		// Table filled only after the record is safely in the pool: an early return
+		// above leaves the entry at 0, which is "no such mesh" and not a wrong id.
+		mesh_ids_from_gltf_file_to_the_real_array[index] = pool_id
+	}
+
+	//Load the nodes (one entry per RENDERABLE glTF node -- nobody else will add
+	//anything to this pool; the entity layer only ever rewrites slots it was given)
+	//
+	//Walked from the scene roots rather than flat over data.nodes: a node no scene
+	//references is exporter garbage and must not take a slot.
+	//
+	//Every renderable node goes in, LODs included. data/assets/coast_line ships
+	//LOD0..LOD3 of one object as four sibling nodes; all four are registered and
+	//picking one is the consumer's job, because a loader cannot know the distance.
+
+	if len(data.scenes) == 0 {
+		fmt.eprintln("[x] glTF has no scene, so nothing is reachable:", path)
+		ret = .ItJustFailed
+		return
+	}
+
+	// Only scenes[0]. data.scene (the "default scene" key) is a hint about which one
+	// to start with; this loader loads one scene, so the choice is fixed. A file with
+	// several scenes would need a decision this project has not made.
+	//
+	// The root call passes identity in ancestors[0], so a root's own TRS still gets
+	// multiplied in by the first level of the walk.
+	root_ancestors : [MAX_NODE_RECURSION]matrix[4,4]f32
+	root_ancestors[0] = 1
+
+	for root in data.scenes[0].nodes {
+		loadNodeRecursive(data, root, root_ancestors, 0)
 	}
 
 	return //So this proc is end but other may dont
@@ -587,7 +696,7 @@ LoadaGLTF :: proc(path : string) -> (ret : LoadResult) {
 	// default_view.scale is used instead.
 	readTextureView :: proc(
 		tv : ^cgltf.texture_view,
-		tex_map : []u32,
+		tex_map : [MAX_GLTF_TEXTURE_MAP]u32,
 		data : ^cgltf.data,
 		default_view : TextureView,
 	) -> TextureView {
@@ -598,6 +707,21 @@ LoadaGLTF :: proc(path : string) -> (ret : LoadResult) {
 		v := default_view
 		v.texture_id = tex_map[cgltf.texture_index(data, tv.texture)]
 		v.texcoord = i32(tv.texcoord)
+
+		// Hold the id, so retain the id. One retain per edge, and this call site is
+		// the edge: it runs once per texture slot, so a texture referenced by two
+		// slots of one material ends up with refs == 2.
+		//
+		// The zero check is not decoration. RefRetain on id 0 happens to return
+		// false today (on_load[0] is never set, because RefLoad hands out ids from
+		// 1), so an unguarded call would be harmless -- but that is a property of
+		// the id allocator, not a guarantee this code should lean on.
+		if v.texture_id != 0 {
+			if !me.RefRetain(&textures, v.texture_id) {
+				fmt.eprintln("[x] failed to retain texture while building a material, texture pool id:", v.texture_id)
+			}
+		}
+
 		return v
 	}
 
@@ -665,4 +789,198 @@ LoadaGLTF :: proc(path : string) -> (ret : LoadResult) {
 
 		return true
 	}
+
+	// Depth cap for the node walk. Real glTF needs 2 or 3; a file that somehow has a
+	// parent chain longer than this is not something to accommodate, it is something
+	// to refuse rather than descend into forever.
+	MAX_NODE_RECURSION :: 64
+
+	// Walks one glTF node and everything under it, writing one pool slot per node
+	// that carries a mesh.
+	//
+	// `ancestors[i]` holds the world matrix `i` levels up, so `ancestors[0]` is the
+	// parent's world matrix. Shifting the array down one slot per level is what lets
+	// the recursion pass the chain without allocating.
+	//
+	// `data` is a parameter and not a package variable on purpose: glTF mesh indices
+	// are per-file, so a stale `data` would silently translate to another file's
+	// meshes. It also cannot be captured -- an Odin nested proc cannot read an outer
+	// proc's locals (measured).
+	//
+	// Matrix product order is Odin's normal column-major one,
+	// (A * B)[i, j] == sum_k A[i, k] * B[k, j], so parent * local composes the way a
+	// child's local transform is meant to apply after its parent's. Odin matrices are
+	// column-major, which is also what glUniformMatrix4fv wants with transpose ==
+	// false, so raw_data(&matrix[0, 0]) is already the right 16 floats.
+	loadNodeRecursive :: proc(
+		data : ^cgltf.data,
+		node : ^cgltf.node,
+		ancestors : [MAX_NODE_RECURSION]matrix[4,4]f32,
+		depth : int,
+	) {
+		if depth >= MAX_NODE_RECURSION {
+			// Not a recoverable condition: a parent chain this long means the file is
+			// either built wrong or cyclic, and both are data defects.
+			fmt.eprintln("[x] node parent chain deeper than", MAX_NODE_RECURSION, "-- refusing to descend")
+			return
+		}
+
+		local : matrix[4,4]f32
+		// Writes 16 floats into a column-major matrix in one go. glTF stores a node
+		// matrix column-major as well, so there is nothing to transpose.
+		cgltf.node_transform_local(node, &local[0, 0])
+
+		// The roots are called with the identity in ancestors[0], so this is also
+		// where a root's own transform gets in.
+		world := ancestors[0] * local
+
+		// Only nodes carrying a mesh take a slot. cave.gltf has two transform-only
+		// nodes literally named "Camera" and "Sun" that carry neither a camera nor a
+		// light (cameras == 0, lights == 0) -- exporter leftovers. A node that is not
+		// rendered must not appear in this pool at all.
+		if node.mesh != nil {
+			mesh_index := int(cgltf.mesh_index(data, node.mesh))
+
+			if mesh_index < 0 || mesh_index >= MAX_GLTF_MESH_MAP {
+				fmt.eprintln("[x] node references a mesh index outside the lookup table:", mesh_index)
+				return
+			}
+
+			mesh_pool_id := mesh_ids_from_gltf_file_to_the_real_array[mesh_index]
+
+			if mesh_pool_id == 0 {
+				// Reached only if the mesh pass above did not fill the entry, which
+				// means the two passes disagree about what a mesh index is.
+				fmt.eprintln("[x] node points at a mesh that was never loaded, glTF mesh index:", mesh_index)
+				return
+			}
+
+			id := me.ArrayAlloc(&nodes)
+
+			if id == 0 {
+				// Same contract as the other pools: full means the code is wrong, not
+				// that the program should carry on without this node.
+				fmt.eprintln("[x] nodes pool is full, cannot register a renderable node")
+				return
+			}
+
+			// The one edge the entity layer can actually reach: an entity holds a
+			// node, the node holds a mesh, so unloading the node is what releases the
+			// mesh. Without this retain, meshes would never reach refs == 0 and the
+			// pool could only grow.
+			//
+			// The nodes pool itself is a plain Array with no reference counting, so
+			// the chain stops here -- a node is not itself a reference-counted
+			// resource, which is deliberate: nothing owns a node except an entity.
+			if !me.RefRetain(&meshes, mesh_pool_id) {
+				fmt.eprintln("[x] failed to retain mesh while registering a node, mesh pool id:", mesh_pool_id)
+				return
+			}
+
+			slot := me.ArrayGet(&nodes, id)
+			slot.mesh_id = mesh_pool_id
+			slot.transform.matrix_ = world
+		}
+
+		// A transform-only node is still descended into below: its transform has to
+		// keep accumulating into its children. ball.gltf is the one case in this repo
+		// -- a bare "LTEObj" node carries the TRS for four child spheres, and skipping
+		// it would drop that offset without reporting anything.
+		if len(node.children) == 0 {
+			return
+		}
+
+		child_ancestors := ancestors
+		child_ancestors[0] = world
+
+		for child in node.children {
+			loadNodeRecursive(data, child, child_ancestors, depth + 1)
+		}
+	}
+}
+
+UnretainMesh :: proc(id : u32) -> (ret : b8) {
+	mesh := me.RefGet(&meshes, id)
+	if mesh == nil {
+		return false
+	}
+	me.RefUnretain(&meshes, id)
+	if me.Ref(&meshes, id) <= 0 {
+		if !UnloadMesh(id) {
+			fmt.eprintln("UnloadMesh fail!:", id)
+		}
+	}
+	return true
+}
+
+UnloadMesh :: proc(id : u32) -> (ret : b8) {
+	mesh := me.RefGet(&meshes, id)
+	if mesh == nil {
+		return false
+	}
+	for &p in mesh.primitives {
+		delete(p.vertexs)
+		delete(p.indices)
+		gl.DeleteVertexArrays(1, &p.gl_vao_id)
+		gl.DeleteBuffers(1, &p.gl_vbo_id)
+		gl.DeleteBuffers(1, &p.gl_ebo_id)
+		UnretainMaterial(p.material_id)
+	}
+	
+	delete(mesh.primitives)
+	me.RefUnload(&meshes, id)
+	return true
+}
+
+UnretainTexture :: proc(id : u32) -> (ret : b8) {
+	texture := me.RefGet(&textures, id)
+	if texture == nil {
+		return false
+	}
+	me.RefUnretain(&textures, id)
+	if me.Ref(&textures, id) <= 0 {
+		if !UnloadTexture(id) {
+			fmt.eprintln("UnloadTexture fail!:", id)
+		}
+	}
+	return true
+}
+
+
+UnloadTexture :: proc(id : u32) -> (ret : b8) {
+	texture := me.RefGet(&textures, id)
+	if texture == nil {
+		return false
+	}
+	gl.DeleteTextures(1, &texture.gl_texture_id)
+	me.RefUnload(&textures, id)
+	return true
+}
+
+UnretainMaterial :: proc(id : u32) -> (ret : b8) {
+	material := me.RefGet(&materials, id)
+	if material == nil {
+		return false
+	}
+	me.RefUnretain(&materials, id)
+	if me.Ref(&materials, id) <= 0 {
+		if !UnloadMaterial(id) {
+			fmt.eprintln("UnloadMaterial fail!:", id)
+		}
+	}
+	return true
+}
+
+UnloadMaterial :: proc(id : u32) -> (ret : b8) {
+	material := me.RefGet(&materials, id)
+	if material == nil {
+		return false
+	}
+	UnretainTexture(material.normal_texture.texture_id)
+	UnretainTexture(material.occlusion_texture.texture_id)
+	UnretainTexture(material.emissive_texture.texture_id)
+	UnretainTexture(material.base_color_texture.texture_id)
+	UnretainTexture(material.metallic_roughness_texture.texture_id)
+	me.RefUnload(&materials, id)
+	return true
 }

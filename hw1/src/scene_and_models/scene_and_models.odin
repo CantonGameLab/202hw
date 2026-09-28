@@ -101,4 +101,4 @@ meshes : me.RefCounted(MAX_MESH_COUNT, Mesh)
 textures : me.RefCounted(MAX_TEXTURE_COUNT, Texture)
 materials : me.RefCounted(MAX_MATERIAL_COUNT, Material)
 
-
+nodes : me.Array(MAX_NODE_COUNT, Node)
