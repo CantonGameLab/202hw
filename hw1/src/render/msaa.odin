@@ -28,70 +28,6 @@ MSAA_Pass :: struct {
 msaa : MSAA_Pass
 blit_program : u32
 
-// Builds both framebuffers at the given pixel size.
-//
-// Cost: two framebuffer objects, three renderbuffers, one texture, and the
-// multisampled storage itself. Called only on start and on resize, never per
-// frame.
-// GPU relationship: on return, framebuffer 0 is bound again, so the caller keeps
-// rendering to the window unless it explicitly binds this pass.
-MSAAInit :: proc(w, h : i32) -> bool {
-	msaa.width = w
-	msaa.height = h
-
-	// --- Multisampled target: colour and depth, both as renderbuffers -------
-	// A texture would be useless here. Multisample storage cannot be bound to a
-	// sampler, so the only consumer is the blit below, and renderbuffers are the
-	// cheaper object for that.
-	gl.GenRenderbuffers(1, &msaa.rbo_color)
-	gl.BindRenderbuffer(gl.RENDERBUFFER, msaa.rbo_color)
-	gl.RenderbufferStorageMultisample(gl.RENDERBUFFER, MSAA_SAMPLES, gl.RGBA8, w, h)
-
-	gl.GenRenderbuffers(1, &msaa.rbo_depth)
-	gl.BindRenderbuffer(gl.RENDERBUFFER, msaa.rbo_depth)
-	// DEPTH_COMPONENT24 matches what the window already gives us, so switching
-	// targets does not change depth precision.
-	gl.RenderbufferStorageMultisample(gl.RENDERBUFFER, MSAA_SAMPLES, gl.DEPTH_COMPONENT24, w, h)
-
-	gl.GenFramebuffers(1, &msaa.multisample_fbo)
-	gl.BindFramebuffer(gl.FRAMEBUFFER, msaa.multisample_fbo)
-	gl.FramebufferRenderbuffer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.RENDERBUFFER, msaa.rbo_color)
-	gl.FramebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, msaa.rbo_depth) //framebuffer <- a renderbuffer or a texture. You can imagine framebuffer as a section of water pipe that can be connected to any pipe
-
- 
-
-	// Both attachments are multisampled with the same sample count, which is what
-	// FRAMEBUFFER_INCOMPLETE_MULTISAMPLE checks for; mixing a 4x colour with a
-	// single-sample depth is the classic way to fail it.
-	if gl.CheckFramebufferStatus(gl.FRAMEBUFFER) != gl.FRAMEBUFFER_COMPLETE {
-		gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
-		return false
-	}
-
-	// --- Single-sample target: a plain texture the shading pass can sample ----
-	gl.GenTextures(1, &msaa.tex_resolved)
-	gl.BindTexture(gl.TEXTURE_2D, msaa.tex_resolved)
-	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, nil)
-	// Linear rather than a mipmap filter: this image is already resolved and is only
-	// ever magnified or minified uniformly, so there is no chain to walk. A mipmap
-	// min filter here would definitely be wrong, because the texture has one level.
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
-
-	gl.GenFramebuffers(1, &msaa.fbo_resolved)
-	gl.BindFramebuffer(gl.FRAMEBUFFER, msaa.fbo_resolved)
-	gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, msaa.tex_resolved, 0)
-
-	if gl.CheckFramebufferStatus(gl.FRAMEBUFFER) != gl.FRAMEBUFFER_COMPLETE {
-		gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
-		return false
-	}
-
-	gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
-	return true
-}
 
 // Makes the multisampled framebuffer the current draw target.
 //
@@ -139,27 +75,6 @@ MSAADeinit :: proc() {
 	if msaa.fbo_resolved != 0 do gl.DeleteFramebuffers(1, &msaa.fbo_resolved)
 	gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
 	msaa = {}
-}
-// A fullscreen triangle, and nothing else. There is no depth test to configure
-// because the pass writes no depth, and no vertex buffer because the vertex
-// shader manufactures the positions from gl_VertexID.
-//
-// Cost: one draw call covering the whole window, so 2.07 M fragment shader
-// invocations at 1920x1080.
-// GPU relationship: this is the second and last consumer of the pipeline this
-// frame. Its only input is the texture the resolve just produced, and its output
-// is the window's back buffer.
-
-
-FullscreenInit :: proc() {
-	vs := compileShader(gl.VERTEX_SHADER, "resource/shaders/fullscreen.vert")
-	fs := compileShader(gl.FRAGMENT_SHADER, "resource/shaders/fullscreen.frag")
-	blit_program = linkProgram(vs, fs)
-	gl.UseProgram(blit_program)
-	// Unit 0 is where the resolve result is bound.
-	gl.Uniform1i(gl.GetUniformLocation(blit_program, cstring("u_screen_texture")), 0)
-	gl.DeleteShader(vs)
-	gl.DeleteShader(fs)
 }
 
 // Draws a whole offscreen image into a framebuffer, as one fullscreen triangle.

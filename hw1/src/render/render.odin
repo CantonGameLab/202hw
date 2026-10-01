@@ -79,7 +79,7 @@ InitShader :: proc() {
 	
 	gl.GenRenderbuffers(1, &msaa.rbo_color)
 	gl.BindRenderbuffer(gl.RENDERBUFFER, msaa.rbo_color)
-	gl.RenderbufferStorageMultisample(gl.RENDERBUFFER, MSAA_SAMPLES, gl.RGBA8, w, h)
+	gl.RenderbufferStorageMultisample(gl.RENDERBUFFER, MSAA_SAMPLES, gl.RGBA16F, w, h)
 
 	gl.GenRenderbuffers(1, &msaa.rbo_depth)
 	gl.BindRenderbuffer(gl.RENDERBUFFER, msaa.rbo_depth)
@@ -102,7 +102,7 @@ InitShader :: proc() {
 	// --- Single-sample target: a plain texture the shading pass can sample ----
 	gl.GenTextures(1, &msaa.tex_resolved)
 	gl.BindTexture(gl.TEXTURE_2D, msaa.tex_resolved)
-	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, nil)
+	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, h, 0, gl.RGBA, gl.HALF_FLOAT, nil)
 	// Linear rather than a mipmap filter: this image is already resolved and is only
 	// ever magnified or minified uniformly, so there is no chain to walk. A mipmap
 	// min filter here would definitely be wrong, because the texture has one level.
@@ -147,6 +147,14 @@ GetWindowSize :: proc() -> (w : u32, h : u32) {
 Render :: proc() {
 	w, h := GetWindowSize()
 
+	// The window's own depth buffer is cleared here and nowhere else in the frame:
+	// MSAABind clears the depth of the multisampled target instead. Without this
+	// line the window's depth holds whatever the driver left in it at context
+	// creation, and every pass that draws to the window with GL_DEPTH_TEST enabled
+	// is then judged against undefined values. That is not hypothetical -- the
+	// fullscreen display pass was silently discarded on every frame because of it,
+	// and glGetError() reported zero throughout. The colour clear below is not
+	// load-bearing: the display pass covers the whole window anyway.
 	gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
 	gl.Clear(gl.DEPTH_BUFFER_BIT | gl.COLOR_BUFFER_BIT)
 

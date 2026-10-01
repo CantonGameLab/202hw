@@ -259,8 +259,17 @@ LoadAGLTFToAMesh :: proc(path : string) -> (mesh_id : u32, ret : LoadResult) {
 
 	prims := make([dynamic]Primitive)
 
+	// Initialised to the inverted extremes so that the first primitive expands it
+	// into a real box with no special case. It is passed down through the recursion
+	// as an accumulator rather than stored on Primitive: the box belongs to the mesh,
+	// and the two are loaded and freed together.
+	mesh_aabb_acc : AABB
+	mesh_aabb_acc.minmax_offset_x = {max(f32), -max(f32)}
+	mesh_aabb_acc.minmax_offset_y = {max(f32), -max(f32)}
+	mesh_aabb_acc.minmax_offset_z = {max(f32), -max(f32)}
+
 	for root in data.scenes[0].nodes {
-		loadNodeRecursive(data, root, &prims, material_ids_from_gltf_file_to_the_real_array)
+		loadNodeRecursive(data, root, &prims, &mesh_aabb_acc, material_ids_from_gltf_file_to_the_real_array)
 	}
 
 	// Counts what a renderable scene had to produce, so a node that quietly
@@ -299,8 +308,11 @@ LoadAGLTFToAMesh :: proc(path : string) -> (mesh_id : u32, ret : LoadResult) {
 		return
 	}
 
+	// The recursion has folded every primitive's box into this one, so it is already
+	// the mesh's box by the time the slice is complete.
 	mesh := Mesh {
 		primitives = prims[:],
+		aabb = mesh_aabb_acc,
 	}
 
 	mesh_id = me.RefLoad(&meshes, mesh)
@@ -564,6 +576,50 @@ LoadAGLTFToAMesh :: proc(path : string) -> (mesh_id : u32, ret : LoadResult) {
 	// component_count comes from the attribute type (POSITION is always 3, TANGENT
 	// always 4), not from accessor.type, so a source accessor written too wide
 	// cannot overrun the target field.
+	// The primitive's local bounding box, with no transform applied: it is relative
+	// to the node's own space, which is where the vertex positions live.
+	//
+	// The accessor's min/max is used when the file carries it, because that is the
+	// exporter's own answer and costs nothing to read. The spec requires POSITION to
+	// declare both, but has_min/has_max are separate flags from the arrays -- which
+	// are [16]f32 shared by scalar through vec4 -- so an asset that omits them is
+	// possible and would otherwise hand back an all-zero box that looks like a real
+	// answer. A zero box culls everything it belongs to, silently, so the missing
+	// case recomputes from the staged vertices instead of trusting the arrays.
+	//
+	// local_min/local_max is the box before the node's transform. Turning it into a
+	// world box needs all eight corners transformed, not just these two points:
+	// after a rotation the old extremes are no longer the extremes.
+	//
+	// Cost: zero for the accessor path. The fallback walks every staged vertex once,
+	// which for marble_bust is 9746 iterations against a load that already decoded
+	// 448 MB of textures.
+	flattenAccessorToAABB :: proc(
+		acc : ^cgltf.accessor,
+		vtx : []Vertex,
+		local_min, local_max : ^[3]f32,
+	) -> bool {
+		if acc == nil || len(vtx) == 0 {
+			return false
+		}
+
+		if acc.has_min && acc.has_max {
+			local_min^ = {acc.min[0], acc.min[1], acc.min[2]}
+			local_max^ = {acc.max[0], acc.max[1], acc.max[2]}
+			return true
+		}
+
+		lo := [3]f32{max(f32), max(f32), max(f32)}
+		hi := [3]f32{-max(f32), -max(f32), -max(f32)}
+		for v in vtx {
+			lo = {min(lo.x, v.position.x), min(lo.y, v.position.y), min(lo.z, v.position.z)}
+			hi = {max(hi.x, v.position.x), max(hi.y, v.position.y), max(hi.z, v.position.z)}
+		}
+		local_min^ = lo
+		local_max^ = hi
+		return true
+	}
+
 	flattenAccessorToVertexAttribute :: proc(
 		first_column : ^f32,
 		acc : ^cgltf.accessor,
@@ -618,6 +674,7 @@ LoadAGLTFToAMesh :: proc(path : string) -> (mesh_id : u32, ret : LoadResult) {
 		data : ^cgltf.data,
 		node : ^cgltf.node,
 		prims : ^[dynamic]Primitive,
+		mesh_aabb : ^AABB,
 		material_ids : []u32,
 	) {
 
@@ -692,6 +749,28 @@ LoadAGLTFToAMesh :: proc(path : string) -> (mesh_id : u32, ret : LoadResult) {
 						delete(vtx)
 						return
 					}
+					// Read or derive this primitive's local box here, while the staged
+					// positions are still alive, and fold it into the mesh's. Every
+					// failure exit that deletes vtx sits below this point, so reaching it
+					// means the positions are known good.
+					prim_min, prim_max : [3]f32
+					if !flattenAccessorToAABB(a.data, vtx, &prim_min, &prim_max) {
+						fmt.eprintln("[x] could not determine the bounding box:", string(node.name))
+						delete(vtx)
+						return
+					}
+					mesh_aabb.minmax_offset_x = {
+						min(mesh_aabb.minmax_offset_x[0], prim_min.x),
+						max(mesh_aabb.minmax_offset_x[1], prim_max.x),
+					}
+					mesh_aabb.minmax_offset_y = {
+						min(mesh_aabb.minmax_offset_y[0], prim_min.y),
+						max(mesh_aabb.minmax_offset_y[1], prim_max.y),
+					}
+					mesh_aabb.minmax_offset_z = {
+						min(mesh_aabb.minmax_offset_z[0], prim_min.z),
+						max(mesh_aabb.minmax_offset_z[1], prim_max.z),
+					}
 				case .normal:
 					if !flattenAccessorToVertexAttribute(&vtx[0].normal[0], a.data, vertex_count, 3) {
 						fmt.eprintln("[x] attribute flatten failed NORMAL:", string(node.name))
@@ -734,7 +813,6 @@ LoadAGLTFToAMesh :: proc(path : string) -> (mesh_id : u32, ret : LoadResult) {
 				delete(vtx)
 				return
 			}
-
 			// Widen to 4-byte indices, so one UNSIGNED_INT draw path covers every
 			// asset with no branching on the source component type.
 			//
@@ -826,7 +904,7 @@ LoadAGLTFToAMesh :: proc(path : string) -> (mesh_id : u32, ret : LoadResult) {
 		}
 
 		for child in node.children {
-			loadNodeRecursive(data, child, prims, material_ids)
+			loadNodeRecursive(data, child, prims, mesh_aabb, material_ids)
 		}
 	}
 }
