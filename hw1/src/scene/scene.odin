@@ -1,26 +1,24 @@
-package scene_and_models
+package scene
 
 import "vendor:cgltf"
 import "core:fmt"
 import gl "vendor:OpenGL"
 import me "../memory/"
 
-
-Transform :: struct {
-	matrix_ : matrix[4,4]f32
-}
-
+MAX_NODE_COUNT :: 2000
+MAX_MESH_COUNT :: 10000
+MAX_TEXTURE_COUNT :: 10000
+MAX_MATERIAL_COUNT :: 10000
+MAX_LIGHT_COUNT :: 20
+Transform :: matrix[4,4]f32
 
 Texture :: struct {
 	pixels : []u8,
 	gl_texture_id : u32,
-
 	width : u32,
 	height : u32,
-	
 	mag_filter : gl.GL_Enum,
 	min_filter : gl.GL_Enum,
-	
 	wrap_s : gl.GL_Enum,
 	wrap_t : gl.GL_Enum,
 }
@@ -76,6 +74,7 @@ Vertex :: struct {
 Primitive :: struct {
 	vertexs : []Vertex, //if it needs
 	indices : []u32, //if it needs
+	indices_count : u32,
 
 	gl_vbo_id : u32,
 	gl_vao_id : u32,
@@ -87,18 +86,22 @@ Mesh :: struct {
 	primitives : []Primitive,
 }
 
-Node :: struct {
-	mesh_id : u32,
-	transform : Transform, //there is no the suck NODE TREE. It is evil for any game developer otherwise you are A masochism
+Light :: struct {
+	position : [3]f32,
+	color : [3]f32,
+	intensity : f32,
 }
 
-MAX_NODE_COUNT :: 2000
-MAX_MESH_COUNT :: 10000
-MAX_TEXTURE_COUNT :: 10000
-MAX_MATERIAL_COUNT :: 10000
+Node :: struct {
+	mesh_id : u32,
+	transform : Transform, //Node tree actually suck. It is evil for any game developer otherwise you are A masochism
+}
 
 meshes : me.RefCounted(MAX_MESH_COUNT, Mesh)
 textures : me.RefCounted(MAX_TEXTURE_COUNT, Texture)
 materials : me.RefCounted(MAX_MATERIAL_COUNT, Material)
-
 nodes : me.Array(MAX_NODE_COUNT, Node)
+lights : #soa[MAX_LIGHT_COUNT]Light
+lights_count : i32
+
+

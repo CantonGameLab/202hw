@@ -8,29 +8,14 @@
 		{
 			"name":"Scene",
 			"nodes":[
-				0,
-				1,
-				2,
-				3
+				0
 			]
 		}
 	],
 	"nodes":[
 		{
 			"mesh":0,
-			"name":"coast_line_02_LOD0"
-		},
-		{
-			"mesh":1,
-			"name":"coast_line_02_LOD1"
-		},
-		{
-			"mesh":2,
-			"name":"coast_line_02_LOD2"
-		},
-		{
-			"mesh":3,
-			"name":"coast_line_02_LOD3"
+			"name":"coast_line_02"
 		}
 	],
 	"materials":[
@@ -53,7 +38,7 @@
 	],
 	"meshes":[
 		{
-			"name":"Plane.001",
+			"name":"coast_line_02",
 			"primitives":[
 				{
 					"attributes":{
@@ -62,48 +47,6 @@
 						"TEXCOORD_0":2
 					},
 					"indices":3,
-					"material":0
-				}
-			]
-		},
-		{
-			"name":"Plane.002",
-			"primitives":[
-				{
-					"attributes":{
-						"POSITION":4,
-						"NORMAL":5,
-						"TEXCOORD_0":6
-					},
-					"indices":7,
-					"material":0
-				}
-			]
-		},
-		{
-			"name":"Plane.003",
-			"primitives":[
-				{
-					"attributes":{
-						"POSITION":8,
-						"NORMAL":9,
-						"TEXCOORD_0":10
-					},
-					"indices":11,
-					"material":0
-				}
-			]
-		},
-		{
-			"name":"Plane.004",
-			"primitives":[
-				{
-					"attributes":{
-						"POSITION":12,
-						"NORMAL":13,
-						"TEXCOORD_0":14
-					},
-					"indices":15,
 					"material":0
 				}
 			]
@@ -144,108 +87,6 @@
 		{
 			"bufferView":0,
 			"componentType":5126,
-			"count":383936,
-			"max":[
-				22.90814208984375,
-				1.6950998306274414,
-				12.479026794433594
-			],
-			"min":[
-				-22.731002807617188,
-				-0.5916532278060913,
-				-10.80163288116455
-			],
-			"type":"VEC3"
-		},
-		{
-			"bufferView":1,
-			"componentType":5126,
-			"count":383936,
-			"type":"VEC3"
-		},
-		{
-			"bufferView":2,
-			"componentType":5126,
-			"count":383936,
-			"type":"VEC2"
-		},
-		{
-			"bufferView":3,
-			"componentType":5125,
-			"count":2270820,
-			"type":"SCALAR"
-		},
-		{
-			"bufferView":4,
-			"componentType":5126,
-			"count":193328,
-			"max":[
-				22.908906936645508,
-				1.6996746063232422,
-				12.47956371307373
-			],
-			"min":[
-				-22.731002807617188,
-				-0.5940783619880676,
-				-10.80163288116455
-			],
-			"type":"VEC3"
-		},
-		{
-			"bufferView":5,
-			"componentType":5126,
-			"count":193328,
-			"type":"VEC3"
-		},
-		{
-			"bufferView":6,
-			"componentType":5126,
-			"count":193328,
-			"type":"VEC2"
-		},
-		{
-			"bufferView":7,
-			"componentType":5125,
-			"count":1135407,
-			"type":"SCALAR"
-		},
-		{
-			"bufferView":8,
-			"componentType":5126,
-			"count":97664,
-			"max":[
-				22.908906936645508,
-				1.7022489309310913,
-				12.478005409240723
-			],
-			"min":[
-				-22.732181549072266,
-				-0.5940783619880676,
-				-10.800544738769531
-			],
-			"type":"VEC3"
-		},
-		{
-			"bufferView":9,
-			"componentType":5126,
-			"count":97664,
-			"type":"VEC3"
-		},
-		{
-			"bufferView":10,
-			"componentType":5126,
-			"count":97664,
-			"type":"VEC2"
-		},
-		{
-			"bufferView":11,
-			"componentType":5125,
-			"count":567702,
-			"type":"SCALAR"
-		},
-		{
-			"bufferView":12,
-			"componentType":5126,
 			"count":49595,
 			"max":[
 				22.91156005859375,
@@ -260,19 +101,19 @@
 			"type":"VEC3"
 		},
 		{
-			"bufferView":13,
+			"bufferView":1,
 			"componentType":5126,
 			"count":49595,
 			"type":"VEC3"
 		},
 		{
-			"bufferView":14,
+			"bufferView":2,
 			"componentType":5126,
 			"count":49595,
 			"type":"VEC2"
 		},
 		{
-			"bufferView":15,
+			"bufferView":3,
 			"componentType":5123,
 			"count":283848,
 			"type":"SCALAR"
@@ -281,98 +122,26 @@
 	"bufferViews":[
 		{
 			"buffer":0,
-			"byteLength":4607232,
+			"byteLength":595140,
 			"byteOffset":0,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":4607232,
-			"byteOffset":4607232,
-			"target":34962
-		},
-		{
-			"buffer":0,
-			"byteLength":3071488,
-			"byteOffset":9214464,
-			"target":34962
-		},
-		{
-			"buffer":0,
-			"byteLength":9083280,
-			"byteOffset":12285952,
-			"target":34963
-		},
-		{
-			"buffer":0,
-			"byteLength":2319936,
-			"byteOffset":21369232,
-			"target":34962
-		},
-		{
-			"buffer":0,
-			"byteLength":2319936,
-			"byteOffset":23689168,
-			"target":34962
-		},
-		{
-			"buffer":0,
-			"byteLength":1546624,
-			"byteOffset":26009104,
-			"target":34962
-		},
-		{
-			"buffer":0,
-			"byteLength":4541628,
-			"byteOffset":27555728,
-			"target":34963
-		},
-		{
-			"buffer":0,
-			"byteLength":1171968,
-			"byteOffset":32097356,
-			"target":34962
-		},
-		{
-			"buffer":0,
-			"byteLength":1171968,
-			"byteOffset":33269324,
-			"target":34962
-		},
-		{
-			"buffer":0,
-			"byteLength":781312,
-			"byteOffset":34441292,
-			"target":34962
-		},
-		{
-			"buffer":0,
-			"byteLength":2270808,
-			"byteOffset":35222604,
-			"target":34963
-		},
-		{
-			"buffer":0,
 			"byteLength":595140,
-			"byteOffset":37493412,
-			"target":34962
-		},
-		{
-			"buffer":0,
-			"byteLength":595140,
-			"byteOffset":38088552,
+			"byteOffset":595140,
 			"target":34962
 		},
 		{
 			"buffer":0,
 			"byteLength":396760,
-			"byteOffset":38683692,
+			"byteOffset":1190280,
 			"target":34962
 		},
 		{
 			"buffer":0,
 			"byteLength":567696,
-			"byteOffset":39080452,
+			"byteOffset":1587040,
 			"target":34963
 		}
 	],
@@ -384,7 +153,7 @@
 	],
 	"buffers":[
 		{
-			"byteLength":39648148,
+			"byteLength":2154736,
 			"uri":"coast_line_02_4k.bin"
 		}
 	]
