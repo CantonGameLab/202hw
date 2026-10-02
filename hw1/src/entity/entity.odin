@@ -94,29 +94,10 @@ InitScene :: proc() {
 	sam.lights.position[DIRECTIONAL_LIGHT]  = {2.0, 3.0, 2.0}
 	sam.lights.direction[DIRECTIONAL_LIGHT] = {-0.496139, -0.744208, -0.496139}
 	sam.lights.color[DIRECTIONAL_LIGHT]     = {1.0, 0.96, 0.90}
-	sam.lights.intensity[DIRECTIONAL_LIGHT] = 0.35
+	sam.lights.intensity[DIRECTIONAL_LIGHT] = 2.
 
-	// A cool point light on the shadow side. The wrap-around diffuse term never lets a
-	// surface go fully black, so without this the shadowed side of the bust would be
-	// lit by the rim alone and read flat.
-	sam.lights.kind[FILL_LIGHT]      = .Point
-	sam.lights.position[FILL_LIGHT]  = {-1.2, 0.35, 0.9}
-	sam.lights.direction[FILL_LIGHT] = {0, -1, 0}
-	sam.lights.color[FILL_LIGHT]     = {0.75, 0.82, 1.0}
-	sam.lights.intensity[FILL_LIGHT] = 0.50
-
-	// Rim light behind the bust, nearly level with the crown. It contributes almost
-	// nothing to the face and everything to the silhouette, which is what separates
-	// the head from the dark background.
-	sam.lights.kind[RIM_LIGHT]      = .Point
-	sam.lights.position[RIM_LIGHT]  = {-0.5, 0.9, -1.1}
-	sam.lights.direction[RIM_LIGHT] = {0, -1, 0}
-	sam.lights.color[RIM_LIGHT]     = {1.0, 0.98, 0.95}
-	sam.lights.intensity[RIM_LIGHT] = 0.90
-
-	// One slot past the last light, so the loop in the shader walks exactly the three
-	// that were configured above.
-	sam.lights_count = 3
+	
+	sam.lights_count = 1
 }
 
 Update :: proc() { //This is just an empty function because we haven't planned to implement any game logic yet

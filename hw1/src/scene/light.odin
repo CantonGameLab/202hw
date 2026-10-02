@@ -28,7 +28,7 @@ Light :: struct {
 }
 
 lights : #soa[MAX_LIGHT_COUNT]Light
-lights_count : i32
+lights_count : u32
 
 LightProjViewMat :: proc(light_pos : [3]f32, light_direction : [3]f32, light_up : [3]f32 = {}) -> Transform {
 	dir := linalg.normalize(light_direction)
@@ -39,12 +39,19 @@ LightProjViewMat :: proc(light_pos : [3]f32, light_direction : [3]f32, light_up 
 
 	s := GetSceneAABB(view)
 	half_xy := max(max(abs(s.minmax_offset_x[0]), abs(s.minmax_offset_x[1])), max(abs(s.minmax_offset_y[0]), abs(s.minmax_offset_y[1])))
-
+	// far before near, deliberately. The light looks down its own -z, so points in the scene
+	// carry negative light-space z; the larger that z is, the closer the point is to the light.
+	// matrix_ortho3d_f32 maps near to the start of the depth range and far to its end, so
+	// passing (min_z, max_z) hands it the farthest plane as "near" and inverts the entire
+	// depth axis. Every shadow comparison then reads the map backwards: a surface standing on
+	// the ground is judged to be behind the ground, and the map records the receiver instead
+	// of the caster, which is visible as the floor's depth gradient running the wrong way.
 	proj := linalg.matrix_ortho3d_f32(
 		-half_xy, half_xy,
 		-half_xy, half_xy,
-		s.minmax_offset_z[0], s.minmax_offset_z[1],
+		s.minmax_offset_z[1], s.minmax_offset_z[0],
 		false,
 	)
+	
 	return linalg.mul(proj, view)
 }

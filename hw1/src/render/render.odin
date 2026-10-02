@@ -33,6 +33,7 @@ InitShader :: proc() {
 	program.u_light_positions = gl.GetUniformLocation(program.program, cstring("u_light_positions"))
 	program.u_light_colors = gl.GetUniformLocation(program.program, cstring("u_light_colors"))
 	program.u_light_intensities = gl.GetUniformLocation(program.program, cstring("u_light_intensities"))
+	program.u_light_directions = gl.GetUniformLocation(program.program, cstring("u_light_directions"))
 	program.u_camera_transform = gl.GetUniformLocation(program.program, cstring("u_camera_transform"))
 	program.u_shininess = gl.GetUniformLocation(program.program, cstring("u_shininess"))
 	program.u_specular_strength = gl.GetUniformLocation(program.program, cstring("u_specular_strength"))
@@ -102,8 +103,32 @@ InitShader :: proc() {
 	vs = compileShader(gl.VERTEX_SHADER, "resource/shaders/shadow_mapping.vert")
 	fs = compileShader(gl.FRAGMENT_SHADER, "resource/shaders/shadow_mapping.frag")
 	shadow_mapping_program.program = linkProgram(vs, fs)
-	shadow_mapping_program.u_light_mvp = gl.GetUniformLocation(shadow_mapping_program.program, "u_light_mvp")
-	
+	shadow_mapping_program.u_light_mvp = gl.GetUniformLocation(shadow_mapping_program.program, cstring("u_light_mvp"))
+
+	// The map's size. These were declared on the struct and never assigned, so they
+	// stayed zero, and a zero-sized TexImage2D allocates no storage at all -- GL permits
+	// the call and simply creates an empty texture. Attaching that to a framebuffer
+	// gives FRAMEBUFFER_INCOMPLETE_ATTACHMENT, which is exactly the message this caused.
+	//
+	// 2048 square over a box of roughly 4.24 m puts one texel at about 2 mm, against a
+	// bust half a metre tall. Halving it to 1024 would still be adequate and would cut
+	// the storage per light from 12 MB to 3 MB.
+	shadow_mapping_program.resolution_width = 2048
+	shadow_mapping_program.resolution_height = 2048
+
+	// The array uniforms are queried one element at a time rather than once for the
+	// whole array. Element locations are not guaranteed to be contiguous -- measured on
+	// this driver, [1] came back as 1 but [7] as 17 -- so a base location plus an offset
+	// would silently write to the wrong uniform.
+	//
+	// These live in the PBR program, not the shadow program: no_light.frag is what
+	// samples the map, so the lookups are made against program.program even though the
+	// values are stored alongside the shadow pass that publishes them.
+	for i in 0 ..< sam.MAX_LIGHT_COUNT {
+		program.u_light_view_projs[i] = gl.GetUniformLocation(program.program, fmt.ctprintf("u_light_view_projs[%d]", i))
+		program.u_light_shadow_maps[i] = gl.GetUniformLocation(program.program, fmt.ctprintf("u_light_shadow_maps[%d]", i))
+	}
+	program.u_light_has_shadow = gl.GetUniformLocation(program.program, cstring("u_light_has_shadow[0]"))
 }
 
 GetWindowSize :: proc() -> (w : u32, h : u32) {
@@ -120,6 +145,28 @@ Render :: proc() {
 	gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
 	gl.Clear(gl.DEPTH_BUFFER_BIT | gl.COLOR_BUFFER_BIT)
 
+	//shadow mapping pass
+	//
+	// Only directional lights are rendered into. RasterizationShadowMap builds an
+	// orthographic matrix from the light's position and direction, which is the shape a
+	// directional light has; a point light emits in every direction and would need a cube
+	// map, so running it here would produce a plausible-looking map covering the wrong
+	// volume and consume a texture unit for nothing.
+	//
+	// The creation test is an OR: a light needs a map when either name is still missing.
+	// With AND, a light holding one but not the other would never be repaired and would
+	// draw into framebuffer zero, which is the window.
+	for i := u32(0); i < sam.lights_count; i += 1 {
+		if sam.lights.kind[i] != .Directional {
+			continue
+		}
+		if sam.lights.gl_shadow_map_fbo[i] == 0 || sam.lights.gl_shadow_map_texture[i] == 0 {
+			CreateShadowTexture(i)
+		}
+		RasterizationShadowMap(i)
+	}
+
+	UniformShadowMapping()
 	MSAABind()
 	for i := u32(1); i <= sam.nodes.next; i += 1 {
 		if !sam.nodes.in_use[i] {
@@ -128,8 +175,6 @@ Render :: proc() {
 		DrawPBRNode(i, w, h)
 	}
 	MSAAResolve()
-	// The offscreen image goes to the window; the target is named explicitly rather
-	// than left to whatever the resolve happened to leave bound.
 	BlitToFramebuffer(0, msaa.tex_resolved, i32(w), i32(h))
 
 	s3.GL_SwapWindow(window)
