@@ -28,7 +28,6 @@ MSAA_Pass :: struct {
 msaa : MSAA_Pass
 blit_program : u32
 
-
 // Makes the multisampled framebuffer the current draw target.
 //
 // Cost: one state change plus a clear of 4x the window's pixels.
@@ -101,12 +100,6 @@ BlitToFramebuffer :: proc(target_fbo, source_texture : u32, w, h : i32) {
 	gl.ActiveTexture(gl.TEXTURE0)
 	gl.BindTexture(gl.TEXTURE_2D, source_texture)
 
-	// Depth testing is turned off for this pass. The pass writes colour and nothing
-	// else, so the test can only ever reject fragments it has no business judging --
-	// and it does: with GL_DEPTH_TEST enabled the whole triangle is discarded and
-	// the target keeps whatever it had. Measured, not assumed: the identical draw
-	// call moves the centre pixel from the bust's (84,74,63) to the background's
-	// (18,23,31) purely by enabling the depth test.
 	gl.Disable(gl.DEPTH_TEST)
 	gl.Disable(gl.CULL_FACE)
 	gl.BindVertexArray(0)

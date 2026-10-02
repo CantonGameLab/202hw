@@ -17,28 +17,6 @@ INIT_WINDOW_TITLE :: "CERenderer"
 window : ^s3.Window
 gl_context : s3.GLContext
 
-PBRProgram :: struct {
-	vs : u32,
-	fs : u32,
-	program : u32,
-	//locations
-	m_proj : i32,
-	m_view : i32,
-	m_model : i32,
-	m_normal : i32,
-	u_base_color_factor : i32,
-	u_base_color_texture : i32,
-	u_has_base_color_texture : i32,
-	u_light_count : i32,
-	u_light_positions : i32,
-	u_light_colors : i32,
-	u_light_intensities : i32,
-	u_camera_transform : i32,
-	u_shininess : i32,
-	u_specular_strength : i32,
-}
-
-program : PBRProgram
 
 InitShader :: proc() {
 	program.vs = compileShader(gl.VERTEX_SHADER, "resource/shaders/no_light.vert")
@@ -64,18 +42,10 @@ InitShader :: proc() {
 	gl.Uniform1f(program.u_shininess, 64.0)
 	gl.Uniform1f(program.u_specular_strength, 0.35)
 
-	// Builds both framebuffers at the given pixel size.
-	//
-	// Cost: two framebuffer objects, three renderbuffers, one texture, and the
-	// multisampled storage itself. Called only on start and on resize, never per
-	// frame.
-	// GPU relationship: on return, framebuffer 0 is bound again, so the caller keeps
-	// rendering to the window unless it explicitly binds this pass.
-	// --- Multisampled target: colour and depth, both as renderbuffers -------
-	// A texture would be useless here. Multisample storage cannot be bound to a
-	// sampler, so the only consumer is the blit below, and renderbuffers are the
-	// cheaper object for that.
+	//Init the multisapmle pass
 	w, h := i32(INIT_WINDOW_WIDTH), i32(INIT_WINDOW_HEIGHT)
+
+	msaa.width, msaa.height = w, h
 	
 	gl.GenRenderbuffers(1, &msaa.rbo_color)
 	gl.BindRenderbuffer(gl.RENDERBUFFER, msaa.rbo_color)
@@ -83,8 +53,6 @@ InitShader :: proc() {
 
 	gl.GenRenderbuffers(1, &msaa.rbo_depth)
 	gl.BindRenderbuffer(gl.RENDERBUFFER, msaa.rbo_depth)
-	// DEPTH_COMPONENT24 matches what the window already gives us, so switching
-	// targets does not change depth precision.
 	gl.RenderbufferStorageMultisample(gl.RENDERBUFFER, MSAA_SAMPLES, gl.DEPTH_COMPONENT24, w, h)
 
 	gl.GenFramebuffers(1, &msaa.multisample_fbo)
@@ -119,13 +87,8 @@ InitShader :: proc() {
 		gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
 		return
 	}
-
-	gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
-	if !MSAAInit(i32(INIT_WINDOW_WIDTH), i32(INIT_WINDOW_HEIGHT)) {
-		fmt.println("something goes wrong")
-	}
 	
-	//fullscreen init
+	//Init the fullscreen pass
 	vs := compileShader(gl.VERTEX_SHADER, "resource/shaders/fullscreen.vert")
 	fs := compileShader(gl.FRAGMENT_SHADER, "resource/shaders/fullscreen.frag")
 	blit_program = linkProgram(vs, fs)
@@ -134,6 +97,13 @@ InitShader :: proc() {
 	gl.Uniform1i(gl.GetUniformLocation(blit_program, cstring("u_screen_texture")), 0)
 	gl.DeleteShader(vs)
 	gl.DeleteShader(fs)
+
+	//Init the simple and dumb shadow mapping
+	vs = compileShader(gl.VERTEX_SHADER, "resource/shaders/shadow_mapping.vert")
+	fs = compileShader(gl.FRAGMENT_SHADER, "resource/shaders/shadow_mapping.frag")
+	shadow_mapping_program.program = linkProgram(vs, fs)
+	shadow_mapping_program.u_light_mvp = gl.GetUniformLocation(shadow_mapping_program.program, "u_light_mvp")
+	
 }
 
 GetWindowSize :: proc() -> (w : u32, h : u32) {
@@ -147,14 +117,6 @@ GetWindowSize :: proc() -> (w : u32, h : u32) {
 Render :: proc() {
 	w, h := GetWindowSize()
 
-	// The window's own depth buffer is cleared here and nowhere else in the frame:
-	// MSAABind clears the depth of the multisampled target instead. Without this
-	// line the window's depth holds whatever the driver left in it at context
-	// creation, and every pass that draws to the window with GL_DEPTH_TEST enabled
-	// is then judged against undefined values. That is not hypothetical -- the
-	// fullscreen display pass was silently discarded on every frame because of it,
-	// and glGetError() reported zero throughout. The colour clear below is not
-	// load-bearing: the display pass covers the whole window anyway.
 	gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
 	gl.Clear(gl.DEPTH_BUFFER_BIT | gl.COLOR_BUFFER_BIT)
 
@@ -171,66 +133,6 @@ Render :: proc() {
 	BlitToFramebuffer(0, msaa.tex_resolved, i32(w), i32(h))
 
 	s3.GL_SwapWindow(window)
-}
-
-DrawPBRNode :: proc(id : u32, w, h : u32) {
-	node := me.ArrayGet(&sam.nodes, id)
-	if node == nil {
-		return
-	}
-	transform := node.transform
-	mesh := me.RefGet(&sam.meshes, node.mesh_id)
-	if mesh == nil {
-		return
-	}
-
-	aspect := f32(w) / f32(h)
-	view_matrix := sam.ViewMatrix(&sam.Main_Camera)
-	proj_matrix := sam.ProjMatrix(&sam.Main_Camera, aspect)
-	gl.UseProgram(program.program)
-
-	gl.UniformMatrix4fv(program.m_view, 1, false, &view_matrix[0,0])
-	gl.UniformMatrix4fv(program.m_proj, 1, false, &proj_matrix[0,0])
-	gl.UniformMatrix4fv(program.m_model, 1, false, &node.transform[0,0])
-
-	m3 := linalg.matrix3_from_matrix4_f32(node.transform)
-	normal_matrix := linalg.transpose(linalg.matrix3_inverse_f32(m3))
-	gl.UniformMatrix3fv(program.m_normal, 1, false, &normal_matrix[0,0])
-	gl.UniformMatrix4fv(program.u_camera_transform, 1, false, &sam.Main_Camera.transform[0,0])
-	gl.Uniform1i(program.u_light_count, sam.lights_count)
-	
-	if sam.lights_count > 0 {
-		n := sam.lights_count
-		gl.Uniform3fv(program.u_light_positions,   n, transmute([^]f32)rawptr(&sam.lights.position))
-		gl.Uniform3fv(program.u_light_colors,      n, transmute([^]f32)rawptr(&sam.lights.color))
-		gl.Uniform1fv(program.u_light_intensities, n, transmute([^]f32)rawptr(&sam.lights.intensity))
-	}
-
-	setMaterialUniforms :: proc(mat : ^sam.Material) {
-		has_tex : i32 = 0
-		if mat.base_color_texture.texture_id != 0 {
-			tex := me.RefGet(&sam.textures, mat.base_color_texture.texture_id)
-			if tex != nil {
-				has_tex = 1
-				gl.ActiveTexture(gl.TEXTURE0)
-				gl.BindTexture(gl.TEXTURE_2D, tex.gl_texture_id)
-			}
-		}
-		gl.Uniform4fv(program.u_base_color_factor, 1, raw_data(&mat.base_color_factor))
-		gl.Uniform1i(program.u_has_base_color_texture, has_tex)
-	}
-
-	for &p, index in mesh.primitives {
-		mat := me.RefGet(&sam.materials, p.material_id)
-		if mat == nil {
-			continue
-		}
-		setMaterialUniforms(mat)
-
-		// The VAO remembers the element buffer binding, so no BindBuffer here.
-		gl.BindVertexArray(p.gl_vao_id)
-		gl.DrawElements(gl.TRIANGLES, i32(p.indices_count), gl.UNSIGNED_INT, nil)
-	}
 }
 
 linkProgram :: proc(vs : u32, fs : u32) -> (program : u32) {

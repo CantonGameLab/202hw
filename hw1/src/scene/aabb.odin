@@ -11,8 +11,11 @@ AABB :: struct {
 }
 
 GetSceneAABB :: proc(view_model : Transform) -> AABB {
-	has_minmax_offset : b8
-	aabb : AABB
+	aabb : AABB = {
+		minmax_offset_x = {max(f32), -max(f32)},
+		minmax_offset_y = {max(f32), -max(f32)},
+		minmax_offset_z = {max(f32), -max(f32)},
+	}
 
 	for i := u32(1); i <= nodes.next; i += 1 {
 		if !nodes.in_use[i] do continue
@@ -28,15 +31,15 @@ GetSceneAABB :: proc(view_model : Transform) -> AABB {
 			}
 			world_position := linalg.mul(node.transform, p)
 			view_position := linalg.mul(view_model, world_position)
-			if !has_minmax_offset {
-				aabb.minmax_offset_x[0] = view_position.x
-				aabb.minmax_offset_x[1] = view_position.x
-				aabb.minmax_offset_y[0] = view_position.y
-				aabb.minmax_offset_y[1] = view_position.y
-				aabb.minmax_offset_z[0] = view_position.z
-				aabb.minmax_offset_z[1] = view_position.z
-				continue
-			}
+	//		if !has_minmax_offset {
+	//			aabb.minmax_offset_x[0] = view_position.x
+	//			aabb.minmax_offset_x[1] = view_position.x
+	//			aabb.minmax_offset_y[0] = view_position.y
+	//			aabb.minmax_offset_y[1] = view_position.y
+	//			aabb.minmax_offset_z[0] = view_position.z
+	//			aabb.minmax_offset_z[1] = view_position.z
+	//			continue
+	//		}
 			aabb.minmax_offset_x[0] = math.min(view_position.x, aabb.minmax_offset_x[0])
 			aabb.minmax_offset_x[1] = math.max(view_position.x, aabb.minmax_offset_x[1])
 			aabb.minmax_offset_y[0] = math.min(view_position.y, aabb.minmax_offset_y[0])
