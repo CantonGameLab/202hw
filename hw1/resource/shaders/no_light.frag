@@ -107,6 +107,7 @@ float pcf_visibility(sampler2D shadow_map, vec2 uv, float receiver_depth, float 
 	return sum / tap_count;
 }
 
+
 void main() {
 	// The factor is applied exactly once. Multiplying it in again after the texture
 	// fetch squares it, which is invisible while the factor is (1,1,1,1) and wrong

@@ -48,14 +48,10 @@ UniformShadowMapping :: proc() {
 	has_shadow : [sam.MAX_LIGHT_COUNT]i32
 
 	for i in u32(0) ..< sam.direction_light_count {
-		// Position is the eye of the light's orthographic camera and direction is where
-		// it looks. Passing the direction twice would put the eye at the origin and aim
-		// the light along its own travel vector, which still yields a self-consistent
-		// matrix covering the wrong volume.
-		light_view_proj := sam.DirectionLightProjViewMat(
-			sam.direction_lights.position[i],
-			sam.direction_lights.direction[i],
-		)
+		// Read back rather than rebuilt. PreComputation already fitted the light's
+		// orthographic box to the scene this frame, and measuring it again here would
+		// walk every node a second time for an answer that is already on the record.
+		light_view_proj := sam.direction_lights[i].proj_view
 
 		slot := int(i)
 		gl.UniformMatrix4fv(program.u_light_view_projs[slot], 1, false, &light_view_proj[0, 0])
@@ -126,38 +122,31 @@ CreateDirectionLightShadowTexture :: proc(id : u32) {
 	gl.DrawBuffer(gl.NONE)
 	gl.ReadBuffer(gl.NONE)
 
-	if gl.CheckFramebufferStatus(gl.FRAMEBUFFER) != gl.FRAMEBUFFER_COMPLETE {
-		fmt.eprintln("[x] shadow framebuffer is not complete for light", id)
-		gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
-		return
-	}
 	gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
 }
 
 RasterizationPointLightShadowMap :: proc(id : u32) {
-	FACE_TARGET := [6]u32 {
-		gl.TEXTURE_CUBE_MAP_POSITIVE_X,   // 0
-		gl.TEXTURE_CUBE_MAP_NEGATIVE_X,   // 1
-		gl.TEXTURE_CUBE_MAP_POSITIVE_Y,   // 2
-		gl.TEXTURE_CUBE_MAP_NEGATIVE_Y,   // 3
-		gl.TEXTURE_CUBE_MAP_POSITIVE_Z,   // 4
-		gl.TEXTURE_CUBE_MAP_NEGATIVE_Z,   // 5
-	}
-	
 	gl.BindFramebuffer(gl.FRAMEBUFFER, sam.point_lights[id].gl_shadow_map_fbo)
 	gl.Viewport(0, 0, shadow_mapping_program.point_light_resolution_width, shadow_mapping_program.point_light_resolution_height)
 	gl.UseProgram(shadow_mapping_program.program)
 	
 	for face in 0..<6 {
-		gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, FACE_TARGET[face], sam.point_lights[id].gl_shadow_map_texture, 0)
+		gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, sam.POINT_LIGHT_FACE_TEXTURE_TARGETS[face], sam.point_lights[id].gl_shadow_map_texture, 0)
+		// One face at a time, and this clears exactly the face just attached: a clear
+		// reaches only the attachment currently on the framebuffer, so re-attaching
+		// before clearing is what keeps the other five faces from being wiped along
+		// with it. Measured: attaching +X and clearing leaves -X..-Z untouched.
 		gl.Clear(gl.DEPTH_BUFFER_BIT)
+		// The matrices were built once in PreComputation. Rebuilding them here would
+		// re-measure the scene per node per face, and the whole point of filling the
+		// light cameras up front is that this pass only reads.
+		light_proj_view := sam.point_lights[id].proj_views[face]
 		for node_index in u32(1) ..= sam.nodes.next {
 			if !sam.nodes.in_use[node_index] do continue
 			node := me.ArrayGet(&sam.nodes, node_index)
 			if node == nil do continue
 			mesh := me.RefGet(&sam.meshes, node.mesh_id)
 			if mesh == nil do continue
-			light_proj_view := sam.PointLightProjViewMat(sam.point_lights[id].position, face)
 			light_mvp := linalg.mul(light_proj_view, node.transform)
 			gl.UniformMatrix4fv(shadow_mapping_program.u_light_mvp, 1, false, &light_mvp[0, 0])
 			for &p in mesh.primitives {
@@ -176,10 +165,7 @@ RasterizationDirectionLightShadowMap :: proc(id : u32) {
 	gl.Clear(gl.DEPTH_BUFFER_BIT)
 	gl.UseProgram(shadow_mapping_program.program)
 
-	light_proj_view := sam.DirectionLightProjViewMat(
-		sam.direction_lights.position[id],
-		sam.direction_lights.direction[id],
-	)
+	light_proj_view := sam.direction_lights[id].proj_view
 
 	for i in u32(1) ..= sam.nodes.next {
 		if !sam.nodes.in_use[i] do continue

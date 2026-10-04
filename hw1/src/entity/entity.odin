@@ -96,6 +96,14 @@ InitScene :: proc() {
 	sam.direction_lights.intensity[DIRECTIONAL_LIGHT] = 1.5
 
 	sam.direction_light_count = 1
+
+	POINT_LIGHT :: 0
+
+	sam.point_lights.position[POINT_LIGHT]  = {0.7, 0.6, -0.7}
+	sam.point_lights.color[POINT_LIGHT]     = {1.0, 0.95, 0.85}
+	sam.point_lights.intensity[POINT_LIGHT] = 3.0
+
+	sam.point_light_count = 1
 }
 
 Update :: proc(delta : f64) {

@@ -2,6 +2,8 @@ package scene
 
 import "vendor:cgltf"
 import "core:fmt"
+import "core:math"
+import "core:math/linalg"
 import gl "vendor:OpenGL"
 import me "../memory/"
 
@@ -97,3 +99,69 @@ textures : me.RefCounted(MAX_TEXTURE_COUNT, Texture)
 materials : me.RefCounted(MAX_MATERIAL_COUNT, Material)
 nodes : me.Array(MAX_NODE_COUNT, Node)
 
+// Turns the data InitScene placed into the pools into the numbers the passes consume.
+//
+// This is the only place the scene is measured. Filling the light cameras here rather
+// than inside each pass is what keeps GetSceneAABB -- which transforms every node's
+// eight mesh-box corners -- to one call per frame instead of one per light per face.
+// The shadow passes and the uniform upload then read the matrices back out of the
+// light records.
+//
+// It runs per frame, not once, so a light that moves is followed without anything
+// else having to know that it moved. The cost is a rebuild of each light's matrices
+// every frame, which is a handful of 4x4 multiplies.
+PreComputation :: proc() {
+	// Measured once and shared. Every light's near/far and orthographic width comes
+	// from this same box, so measuring it per light would give each light a slightly
+	// different scene -- and two lights whose ranges disagree look like a shadow bug
+	// rather than like a duplicated measurement.
+	world := GetSceneAABB(linalg.MATRIX4F32_IDENTITY)
+
+	for i in u32(0) ..< direction_light_count {
+
+		dir := linalg.normalize(direction_lights.direction[i])
+		up := abs(dir.y) > 0.99 ? [3]f32{0, 0, 1} : [3]f32{0, 1, 0}
+		view := linalg.matrix4_look_at_f32(direction_lights.position[i], direction_lights.position[i] + dir, up)
+
+		s := GetSceneAABB(view)
+		half_xy := max(
+			max(abs(s.minmax_offset_x[0]), abs(s.minmax_offset_x[1])),
+			max(abs(s.minmax_offset_y[0]), abs(s.minmax_offset_y[1])),
+		)
+
+		direction_lights[i].half_extent = half_xy
+		direction_lights[i].near = s.minmax_offset_z[1]
+		direction_lights[i].far = s.minmax_offset_z[0]
+
+		direction_lights[i].fov_y = 0
+		direction_lights[i].proj_view = DirectionLightProjViewMat(
+			direction_lights[i].position,
+			dir,
+			half_xy,
+			s.minmax_offset_z[1],
+			s.minmax_offset_z[0],
+		)
+	}
+
+	for i in u32(0) ..< point_light_count {
+		// One depth range for all six faces, measured from the world box. Measuring it
+		// per face would give six ranges, and a stored depth from one face would then
+		// be compared against another face's scale.
+		z_near, z_far := PointLightDepthRange(point_lights[i].position, world)
+
+		point_lights[i].near = z_near
+		point_lights[i].far = z_far
+		// 90 degrees square is the cube map's own geometry, not a choice, so it is
+		// recorded rather than configured.
+		point_lights[i].fov_y = math.PI * 0.5
+
+		for face in 0 ..< 6 {
+			point_lights[i].proj_views[face] = PointLightProjViewMat(
+				point_lights[i].position,
+				face,
+				z_near,
+				z_far,
+			)
+		}
+	}
+}

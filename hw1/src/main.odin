@@ -32,7 +32,7 @@ main :: proc() {
 		}
 
 		entity.Update(delta)
-		
+		scene.PreComputation()
 		render.Render()
 
 		last_seconds = now_seconds
