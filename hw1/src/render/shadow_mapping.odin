@@ -27,7 +27,7 @@ SHADOW_MAP_UNIT_BASE :: 1
 // force the rest of the code to agree with an assumption nothing enforces -- and the
 // symptom of disagreement is shadows that quietly belong to the wrong light.
 //
-// Each light keeps its own slot, which is its index in the lights array, so the shader
+// Each light keeps its own slot, which is its index in the direction_lights array, so the shader
 // can reach the matching map with the loop counter it is already using. That costs
 // texture units: one per shadow-casting light, on top of unit 0 for the material. A
 // point light is skipped, because one 2D depth map cannot cover the directions a point
@@ -42,22 +42,18 @@ UniformShadowMapping :: proc() {
 
 	// Which slots are filled, per light, rather than a count. A count cannot say which
 	// slots hold a map when the slots are light indices instead of a packed range: three
-	// lights with only the second one directional gives a count of one and a slot of
+	// direction_lights with only the second one directional gives a count of one and a slot of
 	// two. The shader needs the per-slot answer.
 	has_shadow : [sam.MAX_LIGHT_COUNT]i32
 
-	for i in u32(0) ..< sam.lights_count {
-		if sam.lights.kind[i] != .Directional {
-			continue
-		}
-
+	for i in u32(0) ..< sam.direction_light_count {
 		// Position is the eye of the light's orthographic camera and direction is where
 		// it looks. Passing the direction twice would put the eye at the origin and aim
 		// the light along its own travel vector, which still yields a self-consistent
 		// matrix covering the wrong volume.
-		light_view_proj := sam.LightProjViewMat(
-			sam.lights.position[i],
-			sam.lights.direction[i],
+		light_view_proj := sam.DirectionLightProjViewMat(
+			sam.direction_lights.position[i],
+			sam.direction_lights.direction[i],
 		)
 
 		slot := int(i)
@@ -71,7 +67,7 @@ UniformShadowMapping :: proc() {
 		// shadow", so the whole surface would go dark for a reason that looks nothing
 		// like a missing map. This branch reports the slot as unshadowed instead, so the
 		// shader never samples it.
-		tex := sam.lights.gl_shadow_map_texture[slot]
+		tex := sam.direction_lights.gl_shadow_map_texture[slot]
 		if tex == 0 {
 			continue
 		}
@@ -85,13 +81,13 @@ UniformShadowMapping :: proc() {
 }
 
 CreateShadowTexture :: proc(id : u32) {
-	// The field is indexed before its address is taken, never after. lights.gl_x is a
+	// The field is indexed before its address is taken, never after. direction_lights.gl_x is a
 	// real [MAX_LIGHT_COUNT]u32 array in the #soa layout, so indexing it yields a real
-	// element to point at. lights[id] is a logical element assembled from one entry of
-	// every field array, and no such object exists in memory, so &lights[id].field has
+	// element to point at. direction_lights[id] is a logical element assembled from one entry of
+	// every field array, and no such object exists in memory, so &direction_lights[id].field has
 	// no address to give and will not fit a ^u32.
-	gl.GenTextures(1, &sam.lights.gl_shadow_map_texture[id])
-	gl.BindTexture(gl.TEXTURE_2D, sam.lights.gl_shadow_map_texture[id])
+	gl.GenTextures(1, &sam.direction_lights.gl_shadow_map_texture[id])
+	gl.BindTexture(gl.TEXTURE_2D, sam.direction_lights.gl_shadow_map_texture[id])
 	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT24, shadow_mapping_program.resolution_width, shadow_mapping_program.resolution_height, 0, gl.DEPTH_COMPONENT, gl.FLOAT, nil)
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
@@ -99,9 +95,9 @@ CreateShadowTexture :: proc(id : u32) {
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAX_LEVEL, 0)
 
-	gl.GenFramebuffers(1, &sam.lights.gl_shadow_map_fbo[id])
-	gl.BindFramebuffer(gl.FRAMEBUFFER, sam.lights.gl_shadow_map_fbo[id])
-	gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, sam.lights.gl_shadow_map_texture[id], 0)
+	gl.GenFramebuffers(1, &sam.direction_lights.gl_shadow_map_fbo[id])
+	gl.BindFramebuffer(gl.FRAMEBUFFER, sam.direction_lights.gl_shadow_map_fbo[id])
+	gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, sam.direction_lights.gl_shadow_map_texture[id], 0)
 	gl.DrawBuffer(gl.NONE)
 	gl.ReadBuffer(gl.NONE)
 
@@ -114,7 +110,7 @@ CreateShadowTexture :: proc(id : u32) {
 }
 
 RasterizationShadowMap :: proc(id : u32) {
-	gl.BindFramebuffer(gl.FRAMEBUFFER, sam.lights.gl_shadow_map_fbo[id])
+	gl.BindFramebuffer(gl.FRAMEBUFFER, sam.direction_lights.gl_shadow_map_fbo[id])
 	gl.Viewport(0, 0, shadow_mapping_program.resolution_width, shadow_mapping_program.resolution_height)
 	gl.Clear(gl.DEPTH_BUFFER_BIT)
 	gl.UseProgram(shadow_mapping_program.program)
@@ -123,9 +119,9 @@ RasterizationShadowMap :: proc(id : u32) {
 	// looks. Feeding the direction into both slots would put the eye at the origin and
 	// aim the light along its own travel vector, which yields a matrix that still looks
 	// self-consistent while covering the wrong volume.
-	light_proj_view := sam.LightProjViewMat(
-		sam.lights.position[id],
-		sam.lights.direction[id],
+	light_proj_view := sam.DirectionLightProjViewMat(
+		sam.direction_lights.position[id],
+		sam.direction_lights.direction[id],
 	)
 
 	// Culling is left at back faces, matching the main pass, and polygon offset is not

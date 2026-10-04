@@ -29,7 +29,7 @@ PBRProgram :: struct {
 	u_light_intensities : i32,
 	// A directional light has no position, so its incidence direction cannot be derived
 	// from one: every surface must be lit from the same direction and with no falloff.
-	// This carries that direction for the lights whose kind says so. Without it the
+	// This carries that direction for the direction_lights whose kind says so. Without it the
 	// shader treats a sun as a point source at its nominal position, which both varies the
 	// direction across the scene and divides the radiance by the squared distance to a
 	// point that is not emitting.
@@ -79,16 +79,16 @@ DrawPBRNode :: proc(id : u32, w, h : u32) {
 	normal_matrix := linalg.transpose(linalg.matrix3_inverse_f32(m3))
 	gl.UniformMatrix3fv(program.m_normal, 1, false, &normal_matrix[0,0])
 	gl.UniformMatrix4fv(program.u_camera_transform, 1, false, &sam.Main_Camera.transform[0,0])
-	gl.Uniform1i(program.u_light_count, i32(sam.lights_count))
+	gl.Uniform1i(program.u_light_count, i32(sam.direction_light_count))
 	
-	if sam.lights_count > 0 {
-		n := i32(sam.lights_count)
-		gl.Uniform3fv(program.u_light_positions,   n, transmute([^]f32)rawptr(&sam.lights.position))
-		gl.Uniform3fv(program.u_light_colors,      n, transmute([^]f32)rawptr(&sam.lights.color))
-		gl.Uniform1fv(program.u_light_intensities, n, transmute([^]f32)rawptr(&sam.lights.intensity))
+	if sam.direction_light_count > 0 {
+		n := i32(sam.direction_light_count)
+		gl.Uniform3fv(program.u_light_positions,   n, transmute([^]f32)rawptr(&sam.direction_lights.position))
+		gl.Uniform3fv(program.u_light_colors,      n, transmute([^]f32)rawptr(&sam.direction_lights.color))
+		gl.Uniform1fv(program.u_light_intensities, n, transmute([^]f32)rawptr(&sam.direction_lights.intensity))
 		// A #soa field array is contiguous, so the same transmute works here as for the
 		// three above. direction is a [3]f32 per light exactly like position is.
-		gl.Uniform3fv(program.u_light_directions,  n, transmute([^]f32)rawptr(&sam.lights.direction))
+		gl.Uniform3fv(program.u_light_directions,  n, transmute([^]f32)rawptr(&sam.direction_lights.direction))
 	}
 
 	for &p, index in mesh.primitives {

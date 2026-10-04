@@ -113,8 +113,8 @@ InitShader :: proc() {
 	// 2048 square over a box of roughly 4.24 m puts one texel at about 2 mm, against a
 	// bust half a metre tall. Halving it to 1024 would still be adequate and would cut
 	// the storage per light from 12 MB to 3 MB.
-	shadow_mapping_program.resolution_width = 2048
-	shadow_mapping_program.resolution_height = 2048
+	shadow_mapping_program.resolution_width = 1024
+	shadow_mapping_program.resolution_height = 1024
 
 	// The array uniforms are queried one element at a time rather than once for the
 	// whole array. Element locations are not guaranteed to be contiguous -- measured on
@@ -147,7 +147,7 @@ Render :: proc() {
 
 	//shadow mapping pass
 	//
-	// Only directional lights are rendered into. RasterizationShadowMap builds an
+	// Only directional direction_lights are rendered into. RasterizationShadowMap builds an
 	// orthographic matrix from the light's position and direction, which is the shape a
 	// directional light has; a point light emits in every direction and would need a cube
 	// map, so running it here would produce a plausible-looking map covering the wrong
@@ -156,11 +156,8 @@ Render :: proc() {
 	// The creation test is an OR: a light needs a map when either name is still missing.
 	// With AND, a light holding one but not the other would never be repaired and would
 	// draw into framebuffer zero, which is the window.
-	for i := u32(0); i < sam.lights_count; i += 1 {
-		if sam.lights.kind[i] != .Directional {
-			continue
-		}
-		if sam.lights.gl_shadow_map_fbo[i] == 0 || sam.lights.gl_shadow_map_texture[i] == 0 {
+	for i := u32(0); i < sam.direction_light_count; i += 1 {
+		if sam.direction_lights.gl_shadow_map_fbo[i] == 0 || sam.direction_lights.gl_shadow_map_texture[i] == 0 {
 			CreateShadowTexture(i)
 		}
 		RasterizationShadowMap(i)

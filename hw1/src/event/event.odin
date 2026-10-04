@@ -4,27 +4,57 @@ import s3 "vendor:sdl3"
 
 quit_requested: bool
 
-// Dispatch a *single* event (used by the blocking main loop: the first event
-// returned by WaitEventTimeout is handed to this).
-// Both Update and the main loop share this proc -- event type classification
-// lives here and only here, never duplicated.
-Dispatch :: proc(e: ^s3.Event) {
-	#partial switch e.type {
-	case .QUIT, .WINDOW_CLOSE_REQUESTED:
-		quit_requested = true
-	}
+MAX_SCANCODE_COUNT :: 512
+
+InputState :: struct {
+	key_down : [MAX_SCANCODE_COUNT]b8,
+	key_pressed : [MAX_SCANCODE_COUNT]b8,
+	key_released : [MAX_SCANCODE_COUNT]b8,
 }
 
-// Poll and apply every pending event; returns true = quit requested
-// (the old name is kept for compatibility).
-Poll :: proc() -> (quit: bool) {
+Input_State : InputState
+Focus_Lost : b8
+
+Poll :: proc() -> bool {
 	for e: s3.Event; s3.PollEvent(&e); {
-		Dispatch(&e)
+		#partial switch e.type {
+		case .QUIT, .WINDOW_CLOSE_REQUESTED:
+			quit_requested = true
+		case .KEY_UP, .KEY_DOWN:
+
+			key_index := i32(e.key.scancode)
+			if key_index < 0 || key_index >= MAX_SCANCODE_COUNT do continue
+
+			if e.key.down {
+				Input_State.key_down[key_index] = true
+				if !e.key.repeat {
+					Input_State.key_pressed[key_index] = true
+				}
+			} else {
+				Input_State.key_down[key_index] = false
+				if !e.key.repeat {
+					Input_State.key_released[key_index] = true
+				}
+			}
+
+			case .WINDOW_FOCUS_LOST:
+				Focus_Lost = true
+
+			case .WINDOW_FOCUS_GAINED:
+				Focus_Lost = false
+		}
 	}
 	return quit_requested
 }
 
-// Quit requested (window close / QUIT).
+FlushInputState :: proc() {
+	for index in 0..<MAX_SCANCODE_COUNT {
+		Input_State.key_released[index] = false
+		//Input_State.key_down[index] = false
+		Input_State.key_pressed[index] = false
+	}
+}
+
 QuitRequested :: proc() -> bool {
 	return quit_requested
 }
