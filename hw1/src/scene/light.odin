@@ -2,6 +2,7 @@ package scene
 
 import me "../memory/"
 import "core:fmt"
+import "core:math"
 import "core:math/linalg"
 import gl "vendor:OpenGL"
 import "vendor:cgltf"
@@ -52,13 +53,7 @@ DirectionLightProjViewMat :: proc(
 		max(abs(s.minmax_offset_x[0]), abs(s.minmax_offset_x[1])),
 		max(abs(s.minmax_offset_y[0]), abs(s.minmax_offset_y[1])),
 	)
-	// far before near, deliberately. The light looks down its own -z, so points in the scene
-	// carry negative light-space z; the larger that z is, the closer the point is to the light.
-	// matrix_ortho3d_f32 maps near to the start of the depth range and far to its end, so
-	// passing (min_z, max_z) hands it the farthest plane as "near" and inverts the entire
-	// depth axis. Every shadow comparison then reads the map backwards: a surface standing on
-	// the ground is judged to be behind the ground, and the map records the receiver instead
-	// of the caster, which is visible as the floor's depth gradient running the wrong way.
+
 	proj := linalg.matrix_ortho3d_f32(
 		-half_xy,
 		half_xy,
@@ -68,5 +63,55 @@ DirectionLightProjViewMat :: proc(
 		s.minmax_offset_z[0],
 		false,
 	)
+	return linalg.mul(proj, view)
+}
+
+
+PointLightProjViewMat :: proc(light_pos: [3]f32, face: int) -> Transform {
+	POINT_LIGHT_FACE_DIRECTIONS := [6][3]f32{
+		{ 1, 0, 0},
+		{-1, 0, 0},
+		{ 0, 1, 0},
+		{ 0,-1, 0},
+		{ 0, 0, 1},
+		{ 0, 0,-1},
+	}
+
+	POINT_LIGHT_FACE_UPS := [6][3]f32{
+		{0,-1, 0},
+		{0,-1, 0},
+		{0, 0, 1},
+		{0, 0,-1},
+		{0,-1, 0},
+		{0,-1, 0},
+	}
+
+	world := GetSceneAABB(linalg.MATRIX4F32_IDENTITY)
+
+	lo := [3]f32{world.minmax_offset_x[0], world.minmax_offset_y[0], world.minmax_offset_z[0]}
+	hi := [3]f32{world.minmax_offset_x[1], world.minmax_offset_y[1], world.minmax_offset_z[1]}
+
+	centre := (lo + hi) * 0.5
+	half_diagonal := linalg.length(hi - lo) * 0.5
+
+	z_near : f32 = 0.01
+	z_far : f32 = 1
+	if half_diagonal > 0 && half_diagonal < max(f32) {
+		nearest := [3]f32{
+			math.max(lo.x, math.min(light_pos.x, hi.x)),
+			math.max(lo.y, math.min(light_pos.y, hi.y)),
+			math.max(lo.z, math.min(light_pos.z, hi.z)),
+		}
+
+		z_near = math.max(linalg.length(light_pos - nearest), half_diagonal * 0.01)
+
+		z_far = linalg.length(light_pos - centre) + half_diagonal
+	}
+
+	dir := POINT_LIGHT_FACE_DIRECTIONS[face]
+	up := POINT_LIGHT_FACE_UPS[face]
+	view := linalg.matrix4_look_at_f32(light_pos, light_pos + dir, up)
+
+	proj := linalg.matrix4_perspective_f32(math.PI * 0.5, 1, z_near, z_far)
 	return linalg.mul(proj, view)
 }

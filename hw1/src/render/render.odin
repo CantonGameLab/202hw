@@ -113,8 +113,11 @@ InitShader :: proc() {
 	// 2048 square over a box of roughly 4.24 m puts one texel at about 2 mm, against a
 	// bust half a metre tall. Halving it to 1024 would still be adequate and would cut
 	// the storage per light from 12 MB to 3 MB.
-	shadow_mapping_program.resolution_width = 1024
-	shadow_mapping_program.resolution_height = 1024
+	shadow_mapping_program.direction_light_resolution_width = 1024
+	shadow_mapping_program.direction_light_resolution_height = 1024
+	shadow_mapping_program.point_light_resolution_width = 1024
+	shadow_mapping_program.point_light_resolution_height = 1024
+
 
 	// The array uniforms are queried one element at a time rather than once for the
 	// whole array. Element locations are not guaranteed to be contiguous -- measured on
@@ -156,12 +159,20 @@ Render :: proc() {
 	// The creation test is an OR: a light needs a map when either name is still missing.
 	// With AND, a light holding one but not the other would never be repaired and would
 	// draw into framebuffer zero, which is the window.
-	for i := u32(0); i < sam.direction_light_count; i += 1 {
+	for i in u32(0) ..< sam.direction_light_count {
 		if sam.direction_lights.gl_shadow_map_fbo[i] == 0 || sam.direction_lights.gl_shadow_map_texture[i] == 0 {
-			CreateShadowTexture(i)
+			CreateDirectionLightShadowTexture(i)
 		}
-		RasterizationShadowMap(i)
+		RasterizationDirectionLightShadowMap(i)
 	}
+
+	for i in u32(0) ..< sam.point_light_count {
+		if sam.point_lights.gl_shadow_map_fbo[i] == 0 || sam.point_lights.gl_shadow_map_texture[i] == 0 {
+			CreatePointLightShadowTexture(i)
+		}
+		RasterizationPointLightShadowMap(i)
+	}
+
 
 	UniformShadowMapping()
 	MSAABind()
