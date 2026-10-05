@@ -59,8 +59,7 @@ initShadowMapping :: proc() {
 	program.u_point_light_positions = gl.GetUniformLocation(program.program, cstring("u_point_light_positions"))
 	program.u_point_light_colors = gl.GetUniformLocation(program.program, cstring("u_point_light_colors"))
 	program.u_point_light_intensities = gl.GetUniformLocation(program.program, cstring("u_point_light_intensities"))
-	program.u_point_light_has_shadow = gl.GetUniformLocation(program.program, cstring("u_point_light_has_shadow"))
-}
+	program.u_point_light_has_shadow = gl.GetUniformLocation(program.program, cstring("u_point_light_has_shadow"))}
 
 RasterizeShadowMap :: proc() {
 	for i in u32(0) ..< sam.direction_light_count {
@@ -134,12 +133,72 @@ UniformShadowMapping :: proc() {
 CreatePointLightShadowTexture :: proc(id : u32) {
 	gl.GenTextures(1, &sam.point_lights[id].gl_shadow_map_texture)
 	gl.BindTexture(gl.TEXTURE_CUBE_MAP, sam.point_lights[id].gl_shadow_map_texture)
-	gl.TexImage2D(gl.TEXTURE_CUBE_MAP_POSITIVE_X, 0, gl.DEPTH_COMPONENT24, shadow_mapping_program.point_light_resolution_width, shadow_mapping_program.point_light_resolution_height, 0, gl.DEPTH_COMPONENT, gl.FLOAT, nil)
-	gl.TexImage2D(gl.TEXTURE_CUBE_MAP_NEGATIVE_X, 0, gl.DEPTH_COMPONENT24, shadow_mapping_program.point_light_resolution_width, shadow_mapping_program.point_light_resolution_height, 0, gl.DEPTH_COMPONENT, gl.FLOAT, nil)
-	gl.TexImage2D(gl.TEXTURE_CUBE_MAP_POSITIVE_Y, 0, gl.DEPTH_COMPONENT24, shadow_mapping_program.point_light_resolution_width, shadow_mapping_program.point_light_resolution_height, 0, gl.DEPTH_COMPONENT, gl.FLOAT, nil)
-	gl.TexImage2D(gl.TEXTURE_CUBE_MAP_NEGATIVE_Y, 0, gl.DEPTH_COMPONENT24, shadow_mapping_program.point_light_resolution_width, shadow_mapping_program.point_light_resolution_height, 0, gl.DEPTH_COMPONENT, gl.FLOAT, nil)
-	gl.TexImage2D(gl.TEXTURE_CUBE_MAP_POSITIVE_Z, 0, gl.DEPTH_COMPONENT24, shadow_mapping_program.point_light_resolution_width, shadow_mapping_program.point_light_resolution_height, 0, gl.DEPTH_COMPONENT, gl.FLOAT, nil)
-	gl.TexImage2D(gl.TEXTURE_CUBE_MAP_NEGATIVE_Z, 0, gl.DEPTH_COMPONENT24, shadow_mapping_program.point_light_resolution_width, shadow_mapping_program.point_light_resolution_height, 0, gl.DEPTH_COMPONENT, gl.FLOAT, nil)
+	gl.TexImage2D(
+		gl.TEXTURE_CUBE_MAP_POSITIVE_X, 
+		0, 
+		gl.DEPTH_COMPONENT24, 
+		shadow_mapping_program.point_light_resolution_width, 
+		shadow_mapping_program.point_light_resolution_height, 
+		0, 
+		gl.DEPTH_COMPONENT, 
+		gl.FLOAT, 
+		nil
+	)
+	gl.TexImage2D(
+		gl.TEXTURE_CUBE_MAP_NEGATIVE_X, 
+		0, 
+		gl.DEPTH_COMPONENT24, 
+		shadow_mapping_program.point_light_resolution_width, 
+		shadow_mapping_program.point_light_resolution_height, 
+		0, 
+		gl.DEPTH_COMPONENT, 
+		gl.FLOAT, 
+		nil
+	)
+	gl.TexImage2D(
+		gl.TEXTURE_CUBE_MAP_POSITIVE_Y, 
+		0, 
+		gl.DEPTH_COMPONENT24, 
+		shadow_mapping_program.point_light_resolution_width, 
+		shadow_mapping_program.point_light_resolution_height, 
+		0, 
+		gl.DEPTH_COMPONENT, 
+		gl.FLOAT, 
+		nil
+	)
+	gl.TexImage2D(
+		gl.TEXTURE_CUBE_MAP_NEGATIVE_Y, 
+		0, 
+		gl.DEPTH_COMPONENT24, 
+		shadow_mapping_program.point_light_resolution_width, 
+		shadow_mapping_program.point_light_resolution_height, 
+		0, 
+		gl.DEPTH_COMPONENT, 
+		gl.FLOAT, 
+		nil
+	)
+	gl.TexImage2D(
+		gl.TEXTURE_CUBE_MAP_POSITIVE_Z, 
+		0, 
+		gl.DEPTH_COMPONENT24, 
+		shadow_mapping_program.point_light_resolution_width, 
+		shadow_mapping_program.point_light_resolution_height, 
+		0, 
+		gl.DEPTH_COMPONENT, 
+		gl.FLOAT, 
+		nil
+	)
+	gl.TexImage2D(
+		gl.TEXTURE_CUBE_MAP_NEGATIVE_Z, 
+		0, 
+		gl.DEPTH_COMPONENT24, 
+		shadow_mapping_program.point_light_resolution_width, 
+		shadow_mapping_program.point_light_resolution_height, 
+		0, 
+		gl.DEPTH_COMPONENT, 
+		gl.FLOAT, 
+		nil
+	)
 	gl.TexParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER,  gl.NEAREST)
 	gl.TexParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MAG_FILTER,  gl.NEAREST)
 	gl.TexParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_S,      gl.CLAMP_TO_EDGE)
@@ -151,7 +210,6 @@ CreatePointLightShadowTexture :: proc(id : u32) {
 	gl.BindFramebuffer(gl.FRAMEBUFFER, sam.point_lights[id].gl_shadow_map_fbo) 
 	gl.DrawBuffer(gl.NONE)         // 每个 FBO 都要设
 	gl.ReadBuffer(gl.NONE)
-	if gl.CheckFramebufferStatus(gl.FRAMEBUFFER) != gl.FRAMEBUFFER_COMPLETE do fmt.eprintln("Gen ", id, " point light framebuffer failed")
 	gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
 }
 

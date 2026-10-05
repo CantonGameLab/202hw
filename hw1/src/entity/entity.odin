@@ -93,17 +93,53 @@ InitScene :: proc() {
 	sam.direction_lights.position[DIRECTIONAL_LIGHT]  = {2.0, 3.0, 2.0}
 	sam.direction_lights.direction[DIRECTIONAL_LIGHT] = {-0.496139, -0.744208, -0.496139}
 	sam.direction_lights.color[DIRECTIONAL_LIGHT]     = {1.0, 0.96, 0.90}
-	sam.direction_lights.intensity[DIRECTIONAL_LIGHT] = 1.5
-
+	sam.direction_lights.intensity[DIRECTIONAL_LIGHT] = .0
 	sam.direction_light_count = 1
 
-	POINT_LIGHT :: 0
+	// Four point lights on a ring around the bust, one per quadrant of the ground
+	// plane. What puts them at four angles rather than one is the shadow: each light
+	// throws the bust's silhouette onto the floor along its own direction, so one
+	// light can only ever show one shadow, and a second at the same angle would
+	// redraw the first one rather than add to it.
+	//
+	// The radius and height are both set against the falloff. Irradiance goes as
+	// 1 / d^2, so a light placed close to the floor drowns it while the same light
+	// raised up reaches the bust with less to spare; the ring radius trades the two
+	// against each other, and 0.8 m of height against 1.3 m of radius leaves every
+	// lit surface inside about 1.4 m of its nearest light.
+	//
+	// The intensity is what keeps the sum under the 1.0 the 8-bit framebuffer can
+	// hold, there being no tonemapping in the pipeline. The brightest point in the
+	// frame -- the floor under the nearest light -- collects roughly 1.0 of the 0.7
+	// from that light, 0.2 from each of the two beside it, and almost nothing from
+	// the one opposite, and the directional light's 1.1 is what is left on top.
+	POINT_LIGHT_RADIUS :: 1.3
+	POINT_LIGHT_HEIGHT :: 0.8
 
-	sam.point_lights.position[POINT_LIGHT]  = {0.7, 0.6, -0.7}
-	sam.point_lights.color[POINT_LIGHT]     = {1.0, 0.95, 0.85}
-	sam.point_lights.intensity[POINT_LIGHT] = 3.0
+	POINT_LIGHT_FRONT_RIGHT :: 0
+	POINT_LIGHT_FRONT_LEFT  :: 1
+	POINT_LIGHT_BACK_LEFT   :: 2
+	POINT_LIGHT_BACK_RIGHT  :: 3
 
-	sam.point_light_count = 1
+	sam.point_lights.position[POINT_LIGHT_FRONT_RIGHT] = { POINT_LIGHT_RADIUS, POINT_LIGHT_HEIGHT,  POINT_LIGHT_RADIUS}
+	sam.point_lights.position[POINT_LIGHT_FRONT_LEFT]  = {-POINT_LIGHT_RADIUS, POINT_LIGHT_HEIGHT,  POINT_LIGHT_RADIUS}
+	sam.point_lights.position[POINT_LIGHT_BACK_LEFT]   = {-POINT_LIGHT_RADIUS, POINT_LIGHT_HEIGHT, -POINT_LIGHT_RADIUS}
+	sam.point_lights.position[POINT_LIGHT_BACK_RIGHT]  = { POINT_LIGHT_RADIUS, POINT_LIGHT_HEIGHT, -POINT_LIGHT_RADIUS}
+
+	// One colour per light, all near white and none the same. A tint is what tells
+	// the four shadows apart on the floor: with identical colours, an overlap reads
+	// as a patch of shade, and only the separate edges say how many lights made it.
+	sam.point_lights.color[POINT_LIGHT_FRONT_RIGHT] = {1.00, 0.93, 0.82}
+	sam.point_lights.color[POINT_LIGHT_FRONT_LEFT]  = {0.82, 0.90, 1.00}
+	sam.point_lights.color[POINT_LIGHT_BACK_LEFT]   = {0.90, 1.00, 0.88}
+	sam.point_lights.color[POINT_LIGHT_BACK_RIGHT]  = {1.00, 0.86, 0.90}
+
+	sam.point_lights.intensity[POINT_LIGHT_FRONT_RIGHT] = 0.
+	sam.point_lights.intensity[POINT_LIGHT_FRONT_LEFT]  = 0.
+	sam.point_lights.intensity[POINT_LIGHT_BACK_LEFT]   = 0.
+	sam.point_lights.intensity[POINT_LIGHT_BACK_RIGHT]  = 10.
+
+	sam.point_light_count = 4
 }
 
 Update :: proc(delta : f64) {

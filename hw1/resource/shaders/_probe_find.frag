@@ -280,6 +280,16 @@ void main() {
 		lit += (diffuse + specular) * radiance;
 	}
 
+	if (u_has_base_color_texture == 0) {
+		// Light 0 stands at (+1.3, +0.8, +1.3), so the floor on the far side of the scene
+		// centre is the place its shadow has to land. Read the cube there.
+		vec3 tl = u_point_light_positions[0] - f_world_pos;
+		float dd = length(tl);
+		float raw = texture(u_point_light_shadow_maps[0], tl).r;
+		float stored = point_depth_to_distance(raw, u_point_light_nears[0], u_point_light_fars[0]);
+		FragColor = vec4(raw, stored / 4.0, dd / 4.0, dd <= stored + 0.010 ? 1.0 : 0.25);
+		return;
+	}
 	FragColor = vec4(lit, base.a);
 }
 
