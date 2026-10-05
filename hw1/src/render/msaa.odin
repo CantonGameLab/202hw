@@ -28,6 +28,64 @@ MSAA_Pass :: struct {
 msaa : MSAA_Pass
 blit_program : u32
 
+initMSAA :: proc() {
+
+	w, h := i32(INIT_WINDOW_WIDTH), i32(INIT_WINDOW_HEIGHT)
+
+	msaa.width, msaa.height = w, h
+	
+	gl.GenRenderbuffers(1, &msaa.rbo_color)
+	gl.BindRenderbuffer(gl.RENDERBUFFER, msaa.rbo_color)
+	gl.RenderbufferStorageMultisample(gl.RENDERBUFFER, MSAA_SAMPLES, gl.RGBA16F, w, h)
+
+	gl.GenRenderbuffers(1, &msaa.rbo_depth)
+	gl.BindRenderbuffer(gl.RENDERBUFFER, msaa.rbo_depth)
+	gl.RenderbufferStorageMultisample(gl.RENDERBUFFER, MSAA_SAMPLES, gl.DEPTH_COMPONENT24, w, h)
+
+	gl.GenFramebuffers(1, &msaa.multisample_fbo)
+	gl.BindFramebuffer(gl.FRAMEBUFFER, msaa.multisample_fbo)
+	gl.FramebufferRenderbuffer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.RENDERBUFFER, msaa.rbo_color)
+	gl.FramebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, msaa.rbo_depth) //framebuffer <- a renderbuffer or a texture. You can imagine framebuffer as a section of water pipe that can be connected to any pipe
+	// Both attachments are multisampled with the same sample count, which is what
+	// FRAMEBUFFER_INCOMPLETE_MULTISAMPLE checks for; mixing a 4x colour with a
+	// single-sample depth is the classic way to fail it.
+	if gl.CheckFramebufferStatus(gl.FRAMEBUFFER) != gl.FRAMEBUFFER_COMPLETE {
+		gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
+		return
+	}
+
+	// --- Single-sample target: a plain texture the shading pass can sample ----
+	gl.GenTextures(1, &msaa.tex_resolved)
+	gl.BindTexture(gl.TEXTURE_2D, msaa.tex_resolved)
+	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, h, 0, gl.RGBA, gl.HALF_FLOAT, nil)
+	// Linear rather than a mipmap filter: this image is already resolved and is only
+	// ever magnified or minified uniformly, so there is no chain to walk. A mipmap
+	// min filter here would definitely be wrong, because the texture has one level.
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+
+	gl.GenFramebuffers(1, &msaa.fbo_resolved)
+	gl.BindFramebuffer(gl.FRAMEBUFFER, msaa.fbo_resolved)
+	gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, msaa.tex_resolved, 0)
+
+	if gl.CheckFramebufferStatus(gl.FRAMEBUFFER) != gl.FRAMEBUFFER_COMPLETE {
+		gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
+		return
+	}
+	
+	//Init the fullscreen pass
+	vs := compileShader(gl.VERTEX_SHADER, "resource/shaders/fullscreen.vert")
+	fs := compileShader(gl.FRAGMENT_SHADER, "resource/shaders/fullscreen.frag")
+	blit_program = linkProgram(vs, fs)
+	gl.UseProgram(blit_program)
+	// Unit 0 is where the resolve result is bound.
+	gl.Uniform1i(gl.GetUniformLocation(blit_program, cstring("u_screen_texture")), 0)
+	gl.DeleteShader(vs)
+	gl.DeleteShader(fs)
+}
+
 // Makes the multisampled framebuffer the current draw target.
 //
 // Cost: one state change plus a clear of 4x the window's pixels.

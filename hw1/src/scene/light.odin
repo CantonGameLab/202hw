@@ -7,6 +7,9 @@ import "core:math/linalg"
 import gl "vendor:OpenGL"
 import "vendor:cgltf"
 
+MAX_LIGHT_COUNT :: 20
+MAX_POINT_LIGHT_COUNT :: 20
+
 LightCamera :: struct {
 	near : f32,
 	far : f32,
@@ -32,7 +35,6 @@ PointLight :: struct {
 	intensity:             f32,
 	gl_shadow_map_fbo:     u32,
 	gl_shadow_map_texture: u32,
-
 	using camera : LightCamera,
 	proj_views : [6]Transform,
 }

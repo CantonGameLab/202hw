@@ -1,91 +1,47 @@
 #version 440 core
 
-#define MAX_LIGHTS 20
+#define MAX_DIRECTION_LIGHT 20
+#define MAX_POINT_LIGHT 20
 
 in vec3 f_world_pos;
 in vec3 f_normal;
 in vec2 f_uv;
 
-uniform int   u_light_count;
-uniform vec3  u_light_positions[MAX_LIGHTS];
-uniform vec3  u_light_colors[MAX_LIGHTS];
-uniform float u_light_intensities[MAX_LIGHTS];
+uniform int			u_light_count;
+uniform vec3  		u_light_positions[MAX_DIRECTION_LIGHT];
+uniform vec3  		u_light_colors[MAX_DIRECTION_LIGHT];
+uniform float 		u_light_intensities[MAX_DIRECTION_LIGHT];
+uniform vec3  		u_light_directions[MAX_DIRECTION_LIGHT];
+uniform sampler2D	u_light_shadow_maps[MAX_DIRECTION_LIGHT];
+uniform mat4      	u_light_view_projs[MAX_DIRECTION_LIGHT];
+uniform int       	u_light_has_shadow[MAX_DIRECTION_LIGHT];
 
-// The travel direction of a directional light, meaning the way its rays go, not the way
-// a surface points to reach it. It is zero for a point light, which has no single
-// direction and is positioned instead -- so a zero here is also how the shader tells the
-// two apart, without a separate kind array to keep in step.
-uniform vec3  u_light_directions[MAX_LIGHTS];
+uniform int			u_point_light_count;
+uniform vec3  		u_point_light_positions[MAX_POINT_LIGHT];
+uniform vec3  		u_point_light_colors[MAX_POINT_LIGHT];
+uniform float		u_point_light_intensities[MAX_POINT_LIGHT];
+uniform samplerCube u_point_light_shadow_maps[MAX_POINT_LIGHT];
+uniform mat4		u_point_light_view_projs[MAX_POINT_LIGHT];
+uniform int			u_point_light_has_shadow[MAX_POINT_LIGHT];
+uniform mat4		u_camera_transform;
 
-// Shadow state, indexed by light slot rather than packed. The slots are light indices,
-// so u_light_has_shadow is an array and not a count: with three lights of which only
-// the second casts, the count would be one while the slot is two. u_light_view_projs is
-// the same light view-projection the shadow pass rendered with, which is what makes the
-// two depths comparable.
-uniform sampler2D u_light_shadow_maps[MAX_LIGHTS];
-uniform mat4      u_light_view_projs[MAX_LIGHTS];
-uniform int       u_light_has_shadow[MAX_LIGHTS];
+uniform vec4		u_base_color_factor;
+uniform sampler2D	u_base_color_texture;
+uniform int			u_has_base_color_texture;
 
-uniform mat4  u_camera_transform;
+uniform float		u_shininess;
+uniform float		u_specular_strength;
 
-uniform vec4  u_base_color_factor;
-uniform sampler2D u_base_color_texture;
-uniform int   u_has_base_color_texture;
+out vec4			FragColor;
 
-// Blinn-Phong exponents. These are not glTF roughness: roughness has to be mapped
-// through a BRDF, which is a later step. 8..256 is the usable range for the
-// classic Blinn-Phong lobe.
-uniform float u_shininess;
-uniform float u_specular_strength;
+const float			SHADOW_BIAS_FLOOR = 0.003;
+const float 		SHADOW_BIAS_SLOPE = 0.060;
 
-out vec4 FragColor;
+const float 		AMBIENT = 0.11;
 
-// Two terms, not one. The floor term covers the depth error one shadow texel spans on a
-// surface squarely facing the light. The slope term grows as the surface turns away from it,
-// because a texel then covers a much longer stretch of that surface and the error grows with
-// it. A single constant has to be sized for the worst slope in the scene, which makes it far
-// too large on every surface that faces the light -- large enough to wash out real shadows.
-const float SHADOW_BIAS_FLOOR = 0.003;
-const float SHADOW_BIAS_SLOPE = 0.060;
+const float 		PCF_RADIUS = 1.;
+const int			PCF_HALF_GRID = 4;
 
-// A stand-in for the light that arrives without coming from any of the sources in the scene:
-// light bounced off the floor and the surroundings. Blinn-Phong has no notion of it, and with
-// a single directional light every shadowed fragment otherwise evaluates to exactly zero,
-// which reads as a hole rather than as shade.
-//
-// It multiplies the material's own base colour rather than any light's colour, so it does not
-// change hue when a light does, and it is added once for the whole surface rather than once
-// per light, so adding a second light does not brighten the shadows twice.
-//
-// A constant because this whole model is on its way out; the replacement carries indirect
-// light as an actual term and this line goes with it.
-const float AMBIENT = 0.11;
-
-// How far the shadow lookup spreads, as a multiple of the sampling grid's own spacing. A single
-// texel's decision is a hard yes or no, so the edge of a shadow lands exactly on the texel grid
-// and shows a stair of whole texels; averaging a neighbourhood turns that stair into a ramp.
-// The width is in the map's own units rather than the world's, so it tracks the map's
-// resolution: halving the map doubles this filter's width in metres and softens the edge with it.
-const float PCF_RADIUS = 1.;
-const int PCF_HALF_GRID = 4;
-
-// Averages the lit-or-occluded decision over a neighbourhood of shadow texels and returns the
-// fraction of them that are lit, which is the fraction of the light source the surface sees.
-//
-// The receiver's own depth is held constant across every tap: what is filtered is the
-// comparison, not the depth it is compared against. Filtering the depth instead averages across
-// a silhouette, which pulls the result towards the middle of the depth range and shows up as a
-// dark halo on the lit side of the edge rather than as a soft edge.
-//
-// The taps are a 4 x 4 grid one texel apart, so they tile a 4 x 4 block of the map. The spacing
-// is one texel and not the radius: a tap samples a point, so taps spread any further apart stop
-// being a neighbourhood and become four unrelated lookups, which shows up as four offset copies
-// of the shadow with nothing between them. radius_texels scales the whole grid instead, moving
-// the taps off the map's texel centres without changing how far apart they are from each other.
-//
-// Cost: 16 texture fetches and 16 comparisons per light, against 1 of each for a single lookup.
-// GPU relationship: the offsets are multiples of the map's texel size, so the filter is
-// expressed entirely in the map's own coordinates and needs no knowledge of world scale.
 float pcf_visibility(sampler2D shadow_map, vec2 uv, float receiver_depth, float bias, float radius_texels) {
 	vec2 texel = vec2(1.0) / vec2(textureSize(shadow_map, 0));
 
@@ -124,7 +80,7 @@ void main() {
 	vec3 V = normalize(u_camera_transform[3].xyz - f_world_pos);
 
 	vec3 lit = vec3(0.0);
-	for (int i = 0; i < MAX_LIGHTS; ++i) {
+	for (int i = 0; i < MAX_DIRECTION_LIGHT; ++i) {
 		if(i >= u_light_count) break;
 
 		// A directional light is identified by carrying a travel direction. Its rays are

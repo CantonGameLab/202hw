@@ -1,4 +1,4 @@
-﻿package render
+package render
 
 import "core:fmt"
 import s3 "vendor:sdl3"
@@ -23,34 +23,29 @@ PBRProgram :: struct {
 	u_base_color_factor : i32,
 	u_base_color_texture : i32,
 	u_has_base_color_texture : i32,
+
 	u_light_count : i32,
 	u_light_positions : i32,
 	u_light_colors : i32,
 	u_light_intensities : i32,
-	// A directional light has no position, so its incidence direction cannot be derived
-	// from one: every surface must be lit from the same direction and with no falloff.
-	// This carries that direction for the direction_lights whose kind says so. Without it the
-	// shader treats a sun as a point source at its nominal position, which both varies the
-	// direction across the scene and divides the radiance by the squared distance to a
-	// point that is not emitting.
 	u_light_directions : i32,
+	u_light_has_shadow : i32,
+	u_light_view_projs : [sam.MAX_LIGHT_COUNT]i32,
+	u_light_shadow_maps : [sam.MAX_LIGHT_COUNT]i32,
+
+	u_point_light_count : i32,
+	u_point_light_positions : i32,
+	u_point_light_colors : i32,
+	u_point_light_intensities : i32,
+	u_point_light_nears : [sam.MAX_POINT_LIGHT_COUNT]i32,
+	u_point_light_fars : [sam.MAX_POINT_LIGHT_COUNT]i32,
+	u_point_light_has_shadow : i32,
+	u_point_light_shadow_maps : [sam.MAX_POINT_LIGHT_COUNT]i32,
+
 	u_camera_transform : i32,
 	u_shininess : i32,
 	u_specular_strength : i32,
 
-	// Shadow state, indexed by light slot to match the array declarations in
-	// no_light.frag. Only the directional light's entry is ever filled, because it is
-	// the only light this project casts shadows from, but the shape has to match what
-	// the shader indexes its light loop with. These describe the light rather than the
-	// object being drawn, so UniformShadowMapping sets them once per frame instead of
-	// once per node.
-	u_light_view_projs : [sam.MAX_LIGHT_COUNT]i32,
-	u_light_shadow_maps : [sam.MAX_LIGHT_COUNT]i32,
-	// Per light, not a count: slots are light indices, so they are not contiguous and a
-	// count cannot say which ones hold a map. Its location is that of element zero; the
-	// whole array is written in one call, which is also why the array is not queried
-	// element by element the way the two above are.
-	u_light_has_shadow : i32,
 }
 
 program : PBRProgram
@@ -79,15 +74,7 @@ DrawPBRNode :: proc(id : u32, w, h : u32) {
 	normal_matrix := linalg.transpose(linalg.matrix3_inverse_f32(m3))
 	gl.UniformMatrix3fv(program.m_normal, 1, false, &normal_matrix[0,0])
 	gl.UniformMatrix4fv(program.u_camera_transform, 1, false, &sam.Main_Camera.transform[0,0])
-	gl.Uniform1i(program.u_light_count, i32(sam.direction_light_count))
 
-	if sam.direction_light_count > 0 {
-		n := i32(sam.direction_light_count)
-		gl.Uniform3fv(program.u_light_positions,   n, transmute([^]f32)rawptr(&sam.direction_lights.position))
-		gl.Uniform3fv(program.u_light_colors,      n, transmute([^]f32)rawptr(&sam.direction_lights.color))
-		gl.Uniform1fv(program.u_light_intensities, n, transmute([^]f32)rawptr(&sam.direction_lights.intensity))
-		gl.Uniform3fv(program.u_light_directions,  n, transmute([^]f32)rawptr(&sam.direction_lights.direction))
-	}
 
 	for &p, index in mesh.primitives {
 		mat := me.RefGet(&sam.materials, p.material_id)
@@ -112,3 +99,23 @@ DrawPBRNode :: proc(id : u32, w, h : u32) {
 	}
 }
 
+initPBR :: proc() {
+	program.vs = compileShader(gl.VERTEX_SHADER, "resource/shaders/no_light.vert")
+	program.fs = compileShader(gl.FRAGMENT_SHADER, "resource/shaders/no_light.frag")
+	program.program = linkProgram(program.vs, program.fs)
+	program.m_proj = gl.GetUniformLocation(program.program, cstring("m_proj"))
+	program.m_view = gl.GetUniformLocation(program.program, cstring("m_view"))
+	program.m_model = gl.GetUniformLocation(program.program, cstring("m_model"))
+	program.m_normal = gl.GetUniformLocation(program.program, cstring("m_normal"))
+	program.u_base_color_factor = gl.GetUniformLocation(program.program, cstring("u_base_color_factor"))
+	program.u_base_color_texture = gl.GetUniformLocation(program.program, cstring("u_base_color_texture"))
+	program.u_has_base_color_texture = gl.GetUniformLocation(program.program, cstring("u_has_base_color_texture"))
+	program.u_camera_transform = gl.GetUniformLocation(program.program, cstring("u_camera_transform"))
+	program.u_shininess = gl.GetUniformLocation(program.program, cstring("u_shininess"))
+	program.u_specular_strength = gl.GetUniformLocation(program.program, cstring("u_specular_strength"))
+
+	gl.UseProgram(program.program)
+	gl.Uniform1i(program.u_base_color_texture, 0)
+	gl.Uniform1f(program.u_shininess, 64.0)
+	gl.Uniform1f(program.u_specular_strength, 0.35)
+}
