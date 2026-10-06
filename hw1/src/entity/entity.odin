@@ -91,9 +91,9 @@ InitScene :: proc() {
 	RIM_LIGHT         :: 2
 
 	sam.direction_lights.position[DIRECTIONAL_LIGHT]  = {2.0, 3.0, 2.0}
-	sam.direction_lights.direction[DIRECTIONAL_LIGHT] = {-0.496139, -0.744208, -0.496139}
+	sam.direction_lights.direction[DIRECTIONAL_LIGHT] = {-0.6, -0.529, -0.6}
 	sam.direction_lights.color[DIRECTIONAL_LIGHT]     = {1.0, 0.96, 0.90}
-	sam.direction_lights.intensity[DIRECTIONAL_LIGHT] = .0
+	sam.direction_lights.intensity[DIRECTIONAL_LIGHT] = 0.
 	sam.direction_light_count = 1
 
 	// Four point lights on a ring around the bust, one per quadrant of the ground
@@ -113,33 +113,21 @@ InitScene :: proc() {
 	// frame -- the floor under the nearest light -- collects roughly 1.0 of the 0.7
 	// from that light, 0.2 from each of the two beside it, and almost nothing from
 	// the one opposite, and the directional light's 1.1 is what is left on top.
-	POINT_LIGHT_RADIUS :: 1.3
+	POINT_LIGHT_RADIUS :: 0.55
 	POINT_LIGHT_HEIGHT :: 0.8
 
 	POINT_LIGHT_FRONT_RIGHT :: 0
-	POINT_LIGHT_FRONT_LEFT  :: 1
-	POINT_LIGHT_BACK_LEFT   :: 2
-	POINT_LIGHT_BACK_RIGHT  :: 3
 
 	sam.point_lights.position[POINT_LIGHT_FRONT_RIGHT] = { POINT_LIGHT_RADIUS, POINT_LIGHT_HEIGHT,  POINT_LIGHT_RADIUS}
-	sam.point_lights.position[POINT_LIGHT_FRONT_LEFT]  = {-POINT_LIGHT_RADIUS, POINT_LIGHT_HEIGHT,  POINT_LIGHT_RADIUS}
-	sam.point_lights.position[POINT_LIGHT_BACK_LEFT]   = {-POINT_LIGHT_RADIUS, POINT_LIGHT_HEIGHT, -POINT_LIGHT_RADIUS}
-	sam.point_lights.position[POINT_LIGHT_BACK_RIGHT]  = { POINT_LIGHT_RADIUS, POINT_LIGHT_HEIGHT, -POINT_LIGHT_RADIUS}
 
 	// One colour per light, all near white and none the same. A tint is what tells
 	// the four shadows apart on the floor: with identical colours, an overlap reads
 	// as a patch of shade, and only the separate edges say how many lights made it.
 	sam.point_lights.color[POINT_LIGHT_FRONT_RIGHT] = {1.00, 0.93, 0.82}
-	sam.point_lights.color[POINT_LIGHT_FRONT_LEFT]  = {0.82, 0.90, 1.00}
-	sam.point_lights.color[POINT_LIGHT_BACK_LEFT]   = {0.90, 1.00, 0.88}
-	sam.point_lights.color[POINT_LIGHT_BACK_RIGHT]  = {1.00, 0.86, 0.90}
 
-	sam.point_lights.intensity[POINT_LIGHT_FRONT_RIGHT] = 0.
-	sam.point_lights.intensity[POINT_LIGHT_FRONT_LEFT]  = 0.
-	sam.point_lights.intensity[POINT_LIGHT_BACK_LEFT]   = 0.
-	sam.point_lights.intensity[POINT_LIGHT_BACK_RIGHT]  = 10.
+	sam.point_lights.intensity[POINT_LIGHT_FRONT_RIGHT] = 2.4
 
-	sam.point_light_count = 4
+	sam.point_light_count = 1
 }
 
 Update :: proc(delta : f64) {

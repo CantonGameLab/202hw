@@ -25,6 +25,30 @@ shadow_mapping_program : ShadowMappingProgram
 // because a sampler uniform holds a unit number and a unit holds one target at a time.
 SHADOW_MAP_UNIT_BASE :: 1
 
+lighting_program :: proc() -> u32 {
+	return program.program
+}
+
+empty_cube_texture : u32
+
+CreateEmptyCubeTexture :: proc() {
+	gl.GenTextures(1, &empty_cube_texture)
+	gl.BindTexture(gl.TEXTURE_CUBE_MAP, empty_cube_texture)
+	for face in 0 ..< 6 {
+		gl.TexImage2D(
+			gl.TEXTURE_CUBE_MAP_POSITIVE_X + u32(face), 0,
+			gl.DEPTH_COMPONENT24, 1, 1, 0, gl.DEPTH_COMPONENT, gl.FLOAT, nil,
+		)
+	}
+	gl.TexParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+	gl.TexParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+	gl.TexParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+	gl.TexParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+	gl.TexParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE)
+	gl.TexParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MAX_LEVEL, 0)
+	gl.BindTexture(gl.TEXTURE_CUBE_MAP, 0)
+}
+
 initShadowMapping :: proc() {
 	vs := compileShader(gl.VERTEX_SHADER, "resource/shaders/shadow_mapping.vert")
 	fs := compileShader(gl.FRAGMENT_SHADER, "resource/shaders/shadow_mapping.frag")
@@ -37,29 +61,33 @@ initShadowMapping :: proc() {
 	shadow_mapping_program.point_light_resolution_width = 1024
 	shadow_mapping_program.point_light_resolution_height = 1024
 
+	CreateEmptyCubeTexture()
+
+	lighting := lighting_program()
+
 	for i in 0 ..< sam.MAX_LIGHT_COUNT {
-		program.u_light_view_projs[i] = gl.GetUniformLocation(program.program, fmt.ctprintf("u_light_view_projs[%d]", i))
-		program.u_light_shadow_maps[i] = gl.GetUniformLocation(program.program, fmt.ctprintf("u_light_shadow_maps[%d]", i))
+		program.u_light_view_projs[i] = gl.GetUniformLocation(lighting, fmt.ctprintf("u_light_view_projs[%d]", i))
+		program.u_light_shadow_maps[i] = gl.GetUniformLocation(lighting, fmt.ctprintf("u_light_shadow_maps[%d]", i))
 	}
 
 	for i in 0 ..< sam.MAX_POINT_LIGHT_COUNT {
-		program.u_point_light_shadow_maps[i] = gl.GetUniformLocation(program.program, fmt.ctprintf("u_point_light_shadow_maps[%d]", i))
-		program.u_point_light_nears[i] = gl.GetUniformLocation(program.program, fmt.ctprintf("u_point_light_nears[%d]", i))
-		program.u_point_light_fars[i] = gl.GetUniformLocation(program.program, fmt.ctprintf("u_point_light_fars[%d]", i))
+		program.u_point_light_shadow_maps[i] = gl.GetUniformLocation(lighting, fmt.ctprintf("u_point_light_shadow_maps[%d]", i))
+		program.u_point_light_nears[i] = gl.GetUniformLocation(lighting, fmt.ctprintf("u_point_light_nears[%d]", i))
+		program.u_point_light_fars[i] = gl.GetUniformLocation(lighting, fmt.ctprintf("u_point_light_fars[%d]", i))
 		
 	}
-	program.u_light_count = gl.GetUniformLocation(program.program, cstring("u_light_count"))
-	program.u_light_positions = gl.GetUniformLocation(program.program, cstring("u_light_positions"))
-	program.u_light_colors = gl.GetUniformLocation(program.program, cstring("u_light_colors"))
-	program.u_light_intensities = gl.GetUniformLocation(program.program, cstring("u_light_intensities"))
-	program.u_light_directions = gl.GetUniformLocation(program.program, cstring("u_light_directions"))
-	program.u_light_has_shadow = gl.GetUniformLocation(program.program, cstring("u_light_has_shadow"))
+	program.u_light_count = gl.GetUniformLocation(lighting, cstring("u_light_count"))
+	program.u_light_positions = gl.GetUniformLocation(lighting, cstring("u_light_positions"))
+	program.u_light_colors = gl.GetUniformLocation(lighting, cstring("u_light_colors"))
+	program.u_light_intensities = gl.GetUniformLocation(lighting, cstring("u_light_intensities"))
+	program.u_light_directions = gl.GetUniformLocation(lighting, cstring("u_light_directions"))
+	program.u_light_has_shadow = gl.GetUniformLocation(lighting, cstring("u_light_has_shadow"))
 	
-	program.u_point_light_count = gl.GetUniformLocation(program.program, cstring("u_point_light_count"))
-	program.u_point_light_positions = gl.GetUniformLocation(program.program, cstring("u_point_light_positions"))
-	program.u_point_light_colors = gl.GetUniformLocation(program.program, cstring("u_point_light_colors"))
-	program.u_point_light_intensities = gl.GetUniformLocation(program.program, cstring("u_point_light_intensities"))
-	program.u_point_light_has_shadow = gl.GetUniformLocation(program.program, cstring("u_point_light_has_shadow"))}
+	program.u_point_light_count = gl.GetUniformLocation(lighting, cstring("u_point_light_count"))
+	program.u_point_light_positions = gl.GetUniformLocation(lighting, cstring("u_point_light_positions"))
+	program.u_point_light_colors = gl.GetUniformLocation(lighting, cstring("u_point_light_colors"))
+	program.u_point_light_intensities = gl.GetUniformLocation(lighting, cstring("u_point_light_intensities"))
+	program.u_point_light_has_shadow = gl.GetUniformLocation(lighting, cstring("u_point_light_has_shadow"))}
 
 RasterizeShadowMap :: proc() {
 	for i in u32(0) ..< sam.direction_light_count {
@@ -75,6 +103,10 @@ RasterizeShadowMap :: proc() {
 
 UniformShadowMapping :: proc() {	
 	gl.UseProgram(program.program)
+
+	empty_unit : i32 = SHADOW_MAP_UNIT_BASE + sam.MAX_LIGHT_COUNT + sam.MAX_POINT_LIGHT_COUNT
+	gl.ActiveTexture(gl.TEXTURE0 + u32(empty_unit))
+	gl.BindTexture(gl.TEXTURE_CUBE_MAP, empty_cube_texture)
 
 	has_direction_light_shadow : [sam.MAX_LIGHT_COUNT]i32
 
@@ -92,6 +124,10 @@ UniformShadowMapping :: proc() {
 		has_direction_light_shadow[i] = 1
 	}
 	
+	for i in int(sam.direction_light_count) ..< sam.MAX_LIGHT_COUNT {
+		has_direction_light_shadow[i] = 0
+	}
+
 	gl.Uniform1iv(program.u_light_has_shadow, sam.MAX_LIGHT_COUNT, &has_direction_light_shadow[0])
 	gl.Uniform1i(program.u_light_count, i32(sam.direction_light_count))
 
@@ -118,6 +154,11 @@ UniformShadowMapping :: proc() {
 		gl.BindTexture(gl.TEXTURE_CUBE_MAP, tex)
 		gl.Uniform1i(program.u_point_light_shadow_maps[i], unit)
 		has_point_light_shadow[i] = 1
+	}
+
+	for i in int(sam.point_light_count) ..< sam.MAX_POINT_LIGHT_COUNT {
+		has_point_light_shadow[i] = 0
+		gl.Uniform1i(program.u_point_light_shadow_maps[i], empty_unit)
 	}
 	
 	gl.Uniform1iv(program.u_point_light_has_shadow, sam.MAX_POINT_LIGHT_COUNT, &has_point_light_shadow[0])
@@ -214,11 +255,6 @@ CreatePointLightShadowTexture :: proc(id : u32) {
 }
 
 CreateDirectionLightShadowTexture :: proc(id : u32) {
-	// The field is indexed before its address is taken, never after. direction_lights.gl_x is a
-	// real [MAX_LIGHT_COUNT]u32 array in the #soa layout, so indexing it yields a real
-	// element to point at. direction_lights[id] is a logical element assembled from one entry of
-	// every field array, and no such object exists in memory, so &direction_lights[id].field has
-	// no address to give and will not fit a ^u32.
 	gl.GenTextures(1, &sam.direction_lights.gl_shadow_map_texture[id])
 	gl.BindTexture(gl.TEXTURE_2D, sam.direction_lights.gl_shadow_map_texture[id])
 	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT24, shadow_mapping_program.direction_light_resolution_width, shadow_mapping_program.direction_light_resolution_height, 0, gl.DEPTH_COMPONENT, gl.FLOAT, nil)
