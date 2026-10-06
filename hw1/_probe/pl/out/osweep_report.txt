@@ -1,0 +1,13 @@
+h 0.35  near 0.021368882  far 2.9240284  -> _probe/pl/out/os_0.35.ppm
+h 0.45  near 0.021368882  far 2.9454346  -> _probe/pl/out/os_0.45.ppm
+h 0.5  near 0.021368882  far 2.9604938  -> _probe/pl/out/os_0.5.ppm
+h 0.55  near 0.06331617  far 2.978259  -> _probe/pl/out/os_0.55.ppm
+h 0.58  near 0.09331614  far 2.990148  -> _probe/pl/out/os_0.58.ppm
+h 0.6  near 0.11331618  far 2.9985633  -> _probe/pl/out/os_0.6.ppm
+h 0.65  near 0.16331613  far 3.0212312  -> _probe/pl/out/os_0.65.ppm
+h 0.7  near 0.21331614  far 3.0460863  -> _probe/pl/out/os_0.7.ppm
+h 0.75  near 0.26331615  far 3.0729544  -> _probe/pl/out/os_0.75.ppm
+h 0.85  near 0.36331618  far 3.1320653  -> _probe/pl/out/os_0.85.ppm
+h 1  near 0.51331615  far 3.2319288  -> _probe/pl/out/os_1.ppm
+h 1.3  near 0.8133161  far 3.4603634  -> _probe/pl/out/os_1.3.ppm
+done

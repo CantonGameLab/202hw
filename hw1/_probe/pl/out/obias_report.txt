@@ -1,0 +1,85 @@
+  upload: dir lights 1  point lights 1  units 1 .. 2
+  scene point lights: count 1  intensities 10 0 0 0
+  scene point light 3: pos [0, 0, 0]  colour [0, 0, 0]  near 0  far 0
+  after scalar upload, the array reads back as 10 0 0 0
+  element 3 alone: loc 213 = 0
+  sampler for light 1: loc 271 = 2  error now NO_ERROR
+bias_texels 0.5  slope_clamp 4.0  h 0.6  -> _probe/pl/out/ob_0.5_h0.6.ppm
+  upload: dir lights 1  point lights 1  units 1 .. 2
+  scene point lights: count 1  intensities 10 0 0 0
+  scene point light 3: pos [0, 0, 0]  colour [0, 0, 0]  near 0  far 0
+  after scalar upload, the array reads back as 10 0 0 0
+  element 3 alone: loc 213 = 0
+  sampler for light 1: loc 271 = 2  error now NO_ERROR
+bias_texels 0.5  slope_clamp 4.0  h 0.7  -> _probe/pl/out/ob_0.5_h0.7.ppm
+  upload: dir lights 1  point lights 1  units 1 .. 2
+  scene point lights: count 1  intensities 10 0 0 0
+  scene point light 3: pos [0, 0, 0]  colour [0, 0, 0]  near 0  far 0
+  after scalar upload, the array reads back as 10 0 0 0
+  element 3 alone: loc 213 = 0
+  sampler for light 1: loc 271 = 2  error now NO_ERROR
+bias_texels 0.5  slope_clamp 4.0  h 1  -> _probe/pl/out/ob_0.5_h1.ppm
+  upload: dir lights 1  point lights 1  units 1 .. 2
+  scene point lights: count 1  intensities 10 0 0 0
+  scene point light 3: pos [0, 0, 0]  colour [0, 0, 0]  near 0  far 0
+  after scalar upload, the array reads back as 10 0 0 0
+  element 3 alone: loc 213 = 0
+  sampler for light 1: loc 271 = 2  error now NO_ERROR
+bias_texels 1.0  slope_clamp 4.0  h 0.6  -> _probe/pl/out/ob_1.0_h0.6.ppm
+  upload: dir lights 1  point lights 1  units 1 .. 2
+  scene point lights: count 1  intensities 10 0 0 0
+  scene point light 3: pos [0, 0, 0]  colour [0, 0, 0]  near 0  far 0
+  after scalar upload, the array reads back as 10 0 0 0
+  element 3 alone: loc 213 = 0
+  sampler for light 1: loc 271 = 2  error now NO_ERROR
+bias_texels 1.0  slope_clamp 4.0  h 0.7  -> _probe/pl/out/ob_1.0_h0.7.ppm
+  upload: dir lights 1  point lights 1  units 1 .. 2
+  scene point lights: count 1  intensities 10 0 0 0
+  scene point light 3: pos [0, 0, 0]  colour [0, 0, 0]  near 0  far 0
+  after scalar upload, the array reads back as 10 0 0 0
+  element 3 alone: loc 213 = 0
+  sampler for light 1: loc 271 = 2  error now NO_ERROR
+bias_texels 1.0  slope_clamp 4.0  h 1  -> _probe/pl/out/ob_1.0_h1.ppm
+  upload: dir lights 1  point lights 1  units 1 .. 2
+  scene point lights: count 1  intensities 10 0 0 0
+  scene point light 3: pos [0, 0, 0]  colour [0, 0, 0]  near 0  far 0
+  after scalar upload, the array reads back as 10 0 0 0
+  element 3 alone: loc 213 = 0
+  sampler for light 1: loc 271 = 2  error now NO_ERROR
+bias_texels 2.0  slope_clamp 4.0  h 0.6  -> _probe/pl/out/ob_2.0_h0.6.ppm
+  upload: dir lights 1  point lights 1  units 1 .. 2
+  scene point lights: count 1  intensities 10 0 0 0
+  scene point light 3: pos [0, 0, 0]  colour [0, 0, 0]  near 0  far 0
+  after scalar upload, the array reads back as 10 0 0 0
+  element 3 alone: loc 213 = 0
+  sampler for light 1: loc 271 = 2  error now NO_ERROR
+bias_texels 2.0  slope_clamp 4.0  h 0.7  -> _probe/pl/out/ob_2.0_h0.7.ppm
+  upload: dir lights 1  point lights 1  units 1 .. 2
+  scene point lights: count 1  intensities 10 0 0 0
+  scene point light 3: pos [0, 0, 0]  colour [0, 0, 0]  near 0  far 0
+  after scalar upload, the array reads back as 10 0 0 0
+  element 3 alone: loc 213 = 0
+  sampler for light 1: loc 271 = 2  error now NO_ERROR
+bias_texels 2.0  slope_clamp 4.0  h 1  -> _probe/pl/out/ob_2.0_h1.ppm
+  upload: dir lights 1  point lights 1  units 1 .. 2
+  scene point lights: count 1  intensities 10 0 0 0
+  scene point light 3: pos [0, 0, 0]  colour [0, 0, 0]  near 0  far 0
+  after scalar upload, the array reads back as 10 0 0 0
+  element 3 alone: loc 213 = 0
+  sampler for light 1: loc 271 = 2  error now NO_ERROR
+bias_texels 4.0  slope_clamp 4.0  h 0.6  -> _probe/pl/out/ob_4.0_h0.6.ppm
+  upload: dir lights 1  point lights 1  units 1 .. 2
+  scene point lights: count 1  intensities 10 0 0 0
+  scene point light 3: pos [0, 0, 0]  colour [0, 0, 0]  near 0  far 0
+  after scalar upload, the array reads back as 10 0 0 0
+  element 3 alone: loc 213 = 0
+  sampler for light 1: loc 271 = 2  error now NO_ERROR
+bias_texels 4.0  slope_clamp 4.0  h 0.7  -> _probe/pl/out/ob_4.0_h0.7.ppm
+  upload: dir lights 1  point lights 1  units 1 .. 2
+  scene point lights: count 1  intensities 10 0 0 0
+  scene point light 3: pos [0, 0, 0]  colour [0, 0, 0]  near 0  far 0
+  after scalar upload, the array reads back as 10 0 0 0
+  element 3 alone: loc 213 = 0
+  sampler for light 1: loc 271 = 2  error now NO_ERROR
+bias_texels 4.0  slope_clamp 4.0  h 1  -> _probe/pl/out/ob_4.0_h1.ppm
+done

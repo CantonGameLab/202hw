@@ -1,0 +1,14 @@
+global_time = 0.016666666666666666  point_light_entity.position = [0.7777095, 0.7000357, 0.012963026]
+   position[ 0 ] = [0.7777095, 0.7000357, 0.012963026]  as raw f32: 0.7777095 0.7000357 0.012963026
+   position[ 1 ] = [0, 0, 0]  as raw f32: 0 0 0
+   position[ 2 ] = [0, 0, 0]  as raw f32: 0 0 0
+   position[ 3 ] = [0, 0, 0]  as raw f32: 0 0 0
+frame 0  light [0.7777095, 0.7000357, 0.012963026]  near 0.21335185  far 3.046105  -> _probe/pl/out/app_00.ppm
+frame 4  light [0.7751183, 0.7000357, 0.06474313]  near 0.21335185  far 3.046105  -> _probe/pl/out/app_04.ppm
+frame 8  light [0.76908344, 0.7000357, 0.1162356]  near 0.21335185  far 3.046105  -> _probe/pl/out/app_08.ppm
+frame 12  light [0.7596317, 0.7000357, 0.16721165]  near 0.21335185  far 3.046105  -> _probe/pl/out/app_12.ppm
+frame 16  light [0.7468051, 0.7000357, 0.2174448]  near 0.21335185  far 3.046105  -> _probe/pl/out/app_16.ppm
+frame 20  light [0.7306605, 0.7000357, 0.26671192]  near 0.21335185  far 3.046105  -> _probe/pl/out/app_20.ppm
+frame 24  light [0.7112698, 0.7000357, 0.31479406]  near 0.21335185  far 3.046105  -> _probe/pl/out/app_24.ppm
+frame 28  light [0.68871903, 0.7000357, 0.36147764]  near 0.21335185  far 3.046105  -> _probe/pl/out/app_28.ppm
+done

@@ -1,0 +1,10 @@
+light 0 at [0.55, 0.8, 0.55]  near = 0.31331617  far = 3.1016674
+   floor y = -0.02825936  so the light is 0.82825935 above it
+   the floor spans -1.5 .. 1.5 in x and z
+
+   over 1681 floor points:
+      angle from the nearest face axis: 2.4442453 .. 54.389507  degrees (45 is the limit)
+      distance from the light: 0.8290136 .. 3.0151308  (range is 0.31331617 .. 3.1016674 )
+      outside the 45 degree cone: 351
+      outside the near..far range: 0
+

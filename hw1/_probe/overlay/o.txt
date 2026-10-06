@@ -1,0 +1,27 @@
+read the render, 946764 bytes; PNG decoding is not available here,
+so the projection is printed as coordinates instead of drawn.
+
+the camera, and where the boundary circle lands in the image:
+   angle 195 deg  world ( -0.5220062 , 0.2627565 )   screen ( 131 , 991 )
+   angle 200 deg  world ( -0.4928921 , 0.17041805 )   screen ( 256 , 932 )
+   angle 205 deg  world ( -0.4558409 , 0.08096868 )   screen ( 366 , 885 )
+   angle 209 deg  world ( -0.41113454 , -0.004911244 )   screen ( 467 , 847 )
+   angle 215 deg  world ( -0.35911345 , -0.08656806 )   screen ( 559 , 816 )
+   angle 220 deg  world ( -0.30017352 , -0.1633802 )   screen ( 645 , 791 )
+   angle 225 deg  world ( -0.23476297 , -0.2347632 )   screen ( 727 , 770 )
+   angle 230 deg  world ( -0.16338015 , -0.30017358 )   screen ( 805 , 752 )
+   angle 235 deg  world ( -0.086568 , -0.35911357 )   screen ( 881 , 738 )
+   angle 240 deg  world ( -0.0049111843 , -0.4111346 )   screen ( 955 , 727 )
+   angle 245 deg  world ( 0.0809688 , -0.4558409 )   screen ( 1028 , 717 )
+   angle 250 deg  world ( 0.17041841 , -0.4928922 )   screen ( 1101 , 710 )
+   angle 255 deg  world ( 0.26275685 , -0.52200633 )   screen ( 1173 , 704 )
+   angle 260 deg  world ( 0.3572814 , -0.542962 )   screen ( 1247 , 700 )
+   angle 265 deg  world ( 0.45327264 , -0.5555994 )   screen ( 1321 , 698 )
+   angle 270 deg  world ( 0.55 , -0.5598226 )   screen ( 1397 , 697 )
+   angle 275 deg  world ( 0.64672744 , -0.5555994 )   screen ( 1475 , 698 )
+   angle 280 deg  world ( 0.7427192 , -0.5429618 )   screen ( 1556 , 700 )
+   angle 285 deg  world ( 0.8372437 , -0.5220062 )   screen ( 1641 , 704 )
+   angle 290 deg  world ( 0.9295821 , -0.49289197 )   screen ( 1730 , 710 )
+   angle 295 deg  world ( 1.0190313 , -0.4558409 )   screen ( 1824 , 717 )
+
+   points behind the camera: 25

@@ -1,0 +1,20 @@
+light 0 at [0.55, 0.8, 0.55]  intensity = 2.4  colour = [1, 0.93, 0.82]
+   irradiance is the shader's own expression, times AMBIENT = 0.11
+
+   along +x from directly under the light, floor albedo assumed 1:
+      distance   horizontal   N.L term   attenuation   radiance   clipped
+      0.82825935    0    1    1.4576973    3.4984736    CLIPPED
+      0.83846694    0.08695652    0.99391294    1.4224209    3.3930302    CLIPPED
+      0.86837    0.17391305    0.97690463    1.326143    3.1092367    CLIPPED
+      0.9160418    0.26086956    0.952086    1.1917069    2.723058    CLIPPED
+      0.9788898    0.3478261    0.92306054    1.0435959    2.3119254    CLIPPED
+      1.0542032    0.4347826    0.8928367    0.89981115    1.9281226    CLIPPED
+      1.139513    0.5217391    0.8634269    0.7701253    1.5958726    CLIPPED
+      1.2327456    0.6086956    0.8359409    0.6580412    1.3202004    CLIPPED
+
+   the horizontal radius at which the pool falls below 1.0:
+      light height 0.4  -> radius 1.1098226  (this scene uses 0.82825935 )
+      light height 0.8  -> radius 1.1098226  (this scene uses 0.82825935 )
+      light height 1.6  -> radius 1.1098226  (this scene uses 0.82825935 )
+      light height 3.2  -> radius 1.1098226  (this scene uses 0.82825935 )
+

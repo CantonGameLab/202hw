@@ -1,0 +1,31 @@
+h = 0.45  near = 0.021368882  far = 2.357676
+   cube = 10  fbo = 4
+  diag face_0.45_-Y -> _probe/pl/out/face_0.45_-Y.ppm  error: NO_ERROR
+  diag face_0.45_+Y -> _probe/pl/out/face_0.45_+Y.ppm  error: NO_ERROR
+  diag face_0.45_+Z -> _probe/pl/out/face_0.45_+Z.ppm  error: NO_ERROR
+h = 0.5  near = 0.021368882  far = 2.407676
+   cube = 10  fbo = 4
+  diag face_0.5_-Y -> _probe/pl/out/face_0.5_-Y.ppm  error: NO_ERROR
+  diag face_0.5_+Y -> _probe/pl/out/face_0.5_+Y.ppm  error: NO_ERROR
+  diag face_0.5_+Z -> _probe/pl/out/face_0.5_+Z.ppm  error: NO_ERROR
+h = 0.55  near = 0.06331617  far = 2.457676
+   cube = 10  fbo = 4
+  diag face_0.55_-Y -> _probe/pl/out/face_0.55_-Y.ppm  error: NO_ERROR
+  diag face_0.55_+Y -> _probe/pl/out/face_0.55_+Y.ppm  error: NO_ERROR
+  diag face_0.55_+Z -> _probe/pl/out/face_0.55_+Z.ppm  error: NO_ERROR
+h = 0.58  near = 0.09331614  far = 2.4876761
+   cube = 10  fbo = 4
+  diag face_0.58_-Y -> _probe/pl/out/face_0.58_-Y.ppm  error: NO_ERROR
+  diag face_0.58_+Y -> _probe/pl/out/face_0.58_+Y.ppm  error: NO_ERROR
+  diag face_0.58_+Z -> _probe/pl/out/face_0.58_+Z.ppm  error: NO_ERROR
+h = 0.65  near = 0.16331613  far = 2.557676
+   cube = 10  fbo = 4
+  diag face_0.65_-Y -> _probe/pl/out/face_0.65_-Y.ppm  error: NO_ERROR
+  diag face_0.65_+Y -> _probe/pl/out/face_0.65_+Y.ppm  error: NO_ERROR
+  diag face_0.65_+Z -> _probe/pl/out/face_0.65_+Z.ppm  error: NO_ERROR
+h = 0.9  near = 0.41331613  far = 2.807676
+   cube = 10  fbo = 4
+  diag face_0.9_-Y -> _probe/pl/out/face_0.9_-Y.ppm  error: NO_ERROR
+  diag face_0.9_+Y -> _probe/pl/out/face_0.9_+Y.ppm  error: NO_ERROR
+  diag face_0.9_+Z -> _probe/pl/out/face_0.9_+Z.ppm  error: NO_ERROR
+done

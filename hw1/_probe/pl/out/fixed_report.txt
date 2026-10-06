@@ -1,0 +1,2 @@
+wrote _probe/pl/out/fixed.ppm from the project's own Render() with resource/shaders/no_light.frag
+done

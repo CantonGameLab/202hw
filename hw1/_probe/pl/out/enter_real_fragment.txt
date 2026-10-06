@@ -1,0 +1,5 @@
+len=7679
+head=<#version 440 core
+
+#define MAX_DIRECTION_LIGHT 20
+>

@@ -98,22 +98,7 @@ textures : me.RefCounted(MAX_TEXTURE_COUNT, Texture)
 materials : me.RefCounted(MAX_MATERIAL_COUNT, Material)
 nodes : me.Array(MAX_NODE_COUNT, Node)
 
-// Turns the data InitScene placed into the pools into the numbers the passes consume.
-//
-// This is the only place the scene is measured. Filling the light cameras here rather
-// than inside each pass is what keeps GetSceneAABB -- which transforms every node's
-// eight mesh-box corners -- to one call per frame instead of one per light per face.
-// The shadow passes and the uniform upload then read the matrices back out of the
-// light records.
-//
-// It runs per frame, not once, so a light that moves is followed without anything
-// else having to know that it moved. The cost is a rebuild of each light's matrices
-// every frame, which is a handful of 4x4 multiplies.
 PreComputation :: proc() {
-	// Measured once and shared. Every light's near/far and orthographic width comes
-	// from this same box, so measuring it per light would give each light a slightly
-	// different scene -- and two lights whose ranges disagree look like a shadow bug
-	// rather than like a duplicated measurement.
 	world := GetSceneAABB(linalg.MATRIX4F32_IDENTITY)
 
 	for i in u32(0) ..< direction_light_count {

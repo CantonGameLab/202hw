@@ -1,0 +1,39 @@
+window = 1920 x 1080
+point light 0  position = [0.55, 0.8, 0.55]  intensity = 2.4  near = 0.31331617  far = 3.1016674
+direction light 0  intensity = 0
+scene box x [-1.5, 1.5]  y [-0.02825936, 0.48668385]  z [-1.5, 1.5]
+wrote resource/shaders/_probe_vis.frag 7244 bytes
+      clear          = 0
+      rasterize      = 0
+      uniforms       = 0
+      probe uploads  = 0
+      msaa bind      = 0
+      draw node 1    = 1282
+      draw node 2    = 1282
+      msaa resolve   = 0
+      blit           = 0
+control program = 12  (0 = did not build)
+      clear          = 0
+      rasterize      = 0
+      uniforms       = 0
+      probe uploads  = 0
+      msaa bind      = 0
+      draw node 1    = 1282
+      draw node 2    = 1282
+      msaa resolve   = 0
+      blit           = 0
+   control centre pixel = 18 23 31
+visibility program = 14  (0 = did not build)
+      clear          = 0
+      rasterize      = 0
+      uniforms       = 0
+      probe uploads  = 0
+      msaa bind      = 0
+      draw node 1    = 1282
+      draw node 2    = 1282
+      msaa resolve   = 0
+      blit           = 0
+gl error for the whole frame = 0
+wrote _probe\vis.bmp
+lit = 0  shadowed = 0  partial (PCF edge) = 2073600
+the partial band lies inside x 0 .. 1919  y 0 .. 1079

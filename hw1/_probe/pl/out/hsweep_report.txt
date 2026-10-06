@@ -1,0 +1,16 @@
+wrote _probe/pl/out/h_0.5.ppm from the project's own Render() with resource/shaders/no_light.frag
+wrote _probe/pl/out/h_0.6.ppm from the project's own Render() with resource/shaders/no_light.frag
+wrote _probe/pl/out/h_0.7.ppm from the project's own Render() with resource/shaders/no_light.frag
+wrote _probe/pl/out/h_0.75.ppm from the project's own Render() with resource/shaders/no_light.frag
+wrote _probe/pl/out/h_0.8.ppm from the project's own Render() with resource/shaders/no_light.frag
+wrote _probe/pl/out/h_0.9.ppm from the project's own Render() with resource/shaders/no_light.frag
+wrote _probe/pl/out/h_1.ppm from the project's own Render() with resource/shaders/no_light.frag
+wrote _probe/pl/out/h_1.2.ppm from the project's own Render() with resource/shaders/no_light.frag
+wrote _probe/pl/out/h_1.5.ppm from the project's own Render() with resource/shaders/no_light.frag
+wrote _probe/pl/out/h_2.ppm from the project's own Render() with resource/shaders/no_light.frag
+  diag axis_stored -> _probe/pl/out/axis_stored.ppm  error: NO_ERROR
+  diag axis_euclid -> _probe/pl/out/axis_euclid.ppm  error: NO_ERROR
+  diag axis_axis -> _probe/pl/out/axis_axis.ppm  error: NO_ERROR
+  diag axis_over_axis -> _probe/pl/out/axis_over_axis.ppm  error: NO_ERROR
+  diag axis_over_euclid -> _probe/pl/out/axis_over_euclid.ppm  error: NO_ERROR
+done

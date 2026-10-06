@@ -1,0 +1,7 @@
+len=165
+head=<#version 440 core
+
+out vec2 f_uv;
+
+void main() {
+	>

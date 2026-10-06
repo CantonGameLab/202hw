@@ -1,0 +1,5 @@
+PLGEO 1
+node 1 mesh 1 prims 1
+prim verts 0 indices 0
+node 2 mesh 2 prims 1
+prim verts 0 indices 0

@@ -48,9 +48,12 @@ const float			POINT_PCF_RADIUS = 1.;
 const float			POINT_BIAS_TEXELS = 2.0;
 const float			POINT_SLOPE_CLAMP = 4.0;
 
+// The cube's face resolution, matching the renderer's request for the point light shadow
+// pass. The bias needs it to turn one texel into the angle it covers.
+const float			POINT_SHADOW_RESOLUTION = 1024.0;
+
 float pcf_visibility(sampler2D shadow_map, vec2 uv, float receiver_depth, float bias, float radius_texels) {
 	vec2 texel = vec2(1.0) / vec2(textureSize(shadow_map, 0));
-
 	vec2 base = uv + texel * 0.5;
 
 	float sum = 0.0;
@@ -96,13 +99,14 @@ float point_shadow_bias(samplerCube shadow_map, float axis_dist, float n_dot_l) 
 	return POINT_BIAS_TEXELS * texel_world * (0.25 + slope);
 }
 
-float point_bias_depth(float bias_world, float axis_dist, float z_near, float z_far) {
+float point_bias_depth(float axis_dist, float z_near, float z_far, float n_dot_l) {
 	float dd = max(z_far - z_near, 1e-6);
-	float d_depth_d_axis = (z_far * z_near) / max(axis_dist * dd, 1e-6);
-	return bias_world * d_depth_d_axis;
+	float slope = min((1.0 - n_dot_l) / max(n_dot_l, 1e-3), POINT_SLOPE_CLAMP);
+	float texel_angle = 2.0 / POINT_SHADOW_RESOLUTION;
+	return POINT_BIAS_TEXELS * texel_angle * (0.25 + slope) * (dd / (z_far * z_near)) * axis_dist * axis_dist;
 }
 
-float point_pcf_visibility(samplerCube shadow_map, vec3 dir, float z_near, float z_far, float receiver_axis, float bias_world, float radius) {
+float point_pcf_visibility(samplerCube shadow_map, vec3 dir, float z_near, float z_far, float receiver_axis, float bias_depth, float radius) {
 	vec3 up = abs(dir.y) < 0.99 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
 	vec3 tangent = normalize(cross(up, dir));
 	vec3 bitangent = cross(dir, tangent);
@@ -110,7 +114,6 @@ float point_pcf_visibility(samplerCube shadow_map, vec3 dir, float z_near, float
 	vec2 texel = vec2(1.0) / vec2(textureSize(shadow_map, 0));
 
 	float receiver_depth = point_distance_to_depth(receiver_axis, z_near, z_far);
-	float bias_depth = point_bias_depth(bias_world, receiver_axis, z_near, z_far);
 
 	float sum = 0.0;
 	for (int y = -PCF_HALF_GRID; y < PCF_HALF_GRID; ++y) {
@@ -122,6 +125,16 @@ float point_pcf_visibility(samplerCube shadow_map, vec3 dir, float z_near, float
 	}
 	float tap_count = float(2 * PCF_HALF_GRID) * float(2 * PCF_HALF_GRID);
 	return sum / tap_count;
+}
+
+
+vec3 aces_tonemap(vec3 x) {
+	const float a = 2.51;
+	const float b = 0.03;
+	const float c = 2.43;
+	const float d = 0.59;
+	const float e = 0.14;
+	return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
 }
 
 
@@ -194,8 +207,8 @@ void main() {
 		if (u_point_light_has_shadow[i] != 0) {
 			vec3 from_light = point_cube_direction(to_light);
 			float axis = point_axis_distance(from_light);
-			float bias = point_shadow_bias(
-				u_point_light_shadow_maps[i], axis, max(dot(N, L), 0.0)
+			float bias = point_bias_depth(
+				axis, u_point_light_nears[i], u_point_light_fars[i], max(dot(N, L), 0.0)
 			);
 			visibility = point_pcf_visibility(
 				u_point_light_shadow_maps[i], from_light,
@@ -217,5 +230,5 @@ void main() {
 		lit += (diffuse + specular) * radiance;
 	}
 
-	FragColor = vec4(lit, base.a);
+	FragColor = vec4(aces_tonemap(lit), base.a);
 }

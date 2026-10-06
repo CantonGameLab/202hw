@@ -15,8 +15,9 @@ import "core:math"
 Scancode :: s3.Scancode
 Node :: sam.Node
 Transform :: matrix[4,4]f32
-MAX_ENTITY_COUNT :: 2000
-ZERO3 :: [3]f32{0., 0., 0.}
+
+MAX_ENTITY_COUNT	:: 2000
+ZERO3				:: [3]f32{0., 0., 0.}
 
 
 Entity :: struct {
@@ -39,7 +40,16 @@ CameraEntity :: struct {
 	position : [3]f32,
 }
 
+PointLightEntity :: struct {
+	position : [3]f32,
+	point_index : u32,
+}
+
+point_light_entity : PointLightEntity
+
 main_camera_entity : CameraEntity
+
+global_time : f64
 
 InitScene :: proc() {
 	marble_bust_model_path := "resource/assets/marble_bust_model/marble_bust_01_4k.gltf"
@@ -96,41 +106,26 @@ InitScene :: proc() {
 	sam.direction_lights.intensity[DIRECTIONAL_LIGHT] = 0.
 	sam.direction_light_count = 1
 
-	// Four point lights on a ring around the bust, one per quadrant of the ground
-	// plane. What puts them at four angles rather than one is the shadow: each light
-	// throws the bust's silhouette onto the floor along its own direction, so one
-	// light can only ever show one shadow, and a second at the same angle would
-	// redraw the first one rather than add to it.
-	//
-	// The radius and height are both set against the falloff. Irradiance goes as
-	// 1 / d^2, so a light placed close to the floor drowns it while the same light
-	// raised up reaches the bust with less to spare; the ring radius trades the two
-	// against each other, and 0.8 m of height against 1.3 m of radius leaves every
-	// lit surface inside about 1.4 m of its nearest light.
-	//
-	// The intensity is what keeps the sum under the 1.0 the 8-bit framebuffer can
-	// hold, there being no tonemapping in the pipeline. The brightest point in the
-	// frame -- the floor under the nearest light -- collects roughly 1.0 of the 0.7
-	// from that light, 0.2 from each of the two beside it, and almost nothing from
-	// the one opposite, and the directional light's 1.1 is what is left on top.
-	POINT_LIGHT_RADIUS :: 0.55
 	POINT_LIGHT_HEIGHT :: 0.8
-
 	POINT_LIGHT_FRONT_RIGHT :: 0
 
-	sam.point_lights.position[POINT_LIGHT_FRONT_RIGHT] = { POINT_LIGHT_RADIUS, POINT_LIGHT_HEIGHT,  POINT_LIGHT_RADIUS}
-
-	// One colour per light, all near white and none the same. A tint is what tells
-	// the four shadows apart on the floor: with identical colours, an overlap reads
-	// as a patch of shade, and only the separate edges say how many lights made it.
+	sam.point_lights.position[POINT_LIGHT_FRONT_RIGHT] = { 0., POINT_LIGHT_HEIGHT, 0.}
 	sam.point_lights.color[POINT_LIGHT_FRONT_RIGHT] = {1.00, 0.93, 0.82}
+	sam.point_lights.intensity[POINT_LIGHT_FRONT_RIGHT] = 10.
 
-	sam.point_lights.intensity[POINT_LIGHT_FRONT_RIGHT] = 2.4
+	point_light_entity.point_index = 0
+	point_light_entity.position = { 0., POINT_LIGHT_HEIGHT, 0.} 
 
 	sam.point_light_count = 1
 }
 
 Update :: proc(delta : f64) {
+
+	global_time += delta
+
+	f32_delta := f32(delta)
+	f32_global_time := f32(global_time)
+
 	using input := &event.Input_State
 	using cam := &main_camera_entity
 
@@ -167,4 +162,8 @@ Update :: proc(delta : f64) {
 	position += {move_world.x, move_world.y, move_world.z}
 
 	sam.Main_Camera.transform = world
+
+	light_xz_length : f32 = math.sqrt(f32(2)) * 3.
+	point_light_entity.position = [3]f32{math.cos(f32_global_time), 0.5, math.sin(f32_global_time)} * light_xz_length
+	sam.point_lights[point_light_entity.point_index].position = point_light_entity.position
 }

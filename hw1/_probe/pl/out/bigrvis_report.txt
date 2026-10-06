@@ -1,0 +1,85 @@
+  upload: dir lights 1  point lights 1  units 1 .. 2
+  scene point lights: count 1  intensities 2.4 0 0 0
+  scene point light 3: pos [0, 0, 0]  colour [0, 0, 0]  near 0  far 0
+  after scalar upload, the array reads back as 0 0 0 0
+  element 3 alone: loc -1 = 0
+  sampler for light 1: loc 190 = 2  error now INVALID_OPERATION 0x502
+phase 0  layer vis_only  -> _probe/pl/out/bv_vis_only_p0.ppm  error: NO_ERROR
+  upload: dir lights 1  point lights 1  units 1 .. 2
+  scene point lights: count 1  intensities 2.4 0 0 0
+  scene point light 3: pos [0, 0, 0]  colour [0, 0, 0]  near 0  far 0
+  after scalar upload, the array reads back as 0 0 0 0
+  element 3 alone: loc -1 = 0
+  sampler for light 1: loc 190 = 2  error now INVALID_OPERATION 0x502
+phase 0  layer vis_depth  -> _probe/pl/out/bv_vis_depth_p0.ppm  error: NO_ERROR
+  upload: dir lights 1  point lights 1  units 1 .. 2
+  scene point lights: count 1  intensities 2.4 0 0 0
+  scene point light 3: pos [0, 0, 0]  colour [0, 0, 0]  near 0  far 0
+  after scalar upload, the array reads back as 0 0 0 0
+  element 3 alone: loc -1 = 0
+  sampler for light 1: loc 190 = 2  error now INVALID_OPERATION 0x502
+phase 0  layer vis_axis  -> _probe/pl/out/bv_vis_axis_p0.ppm  error: NO_ERROR
+  upload: dir lights 1  point lights 1  units 1 .. 2
+  scene point lights: count 1  intensities 2.4 0 0 0
+  scene point light 3: pos [0, 0, 0]  colour [0, 0, 0]  near 0  far 0
+  after scalar upload, the array reads back as 0 0 0 0
+  element 3 alone: loc -1 = 0
+  sampler for light 1: loc 190 = 2  error now INVALID_OPERATION 0x502
+phase 0  layer vis_bias  -> _probe/pl/out/bv_vis_bias_p0.ppm  error: NO_ERROR
+  upload: dir lights 1  point lights 1  units 1 .. 2
+  scene point lights: count 1  intensities 2.4 0 0 0
+  scene point light 3: pos [0, 0, 0]  colour [0, 0, 0]  near 0  far 0
+  after scalar upload, the array reads back as 0 0 0 0
+  element 3 alone: loc -1 = 0
+  sampler for light 1: loc 190 = 2  error now INVALID_OPERATION 0x502
+phase 0  layer vis_stored  -> _probe/pl/out/bv_vis_stored_p0.ppm  error: NO_ERROR
+  upload: dir lights 1  point lights 1  units 1 .. 2
+  scene point lights: count 1  intensities 2.4 0 0 0
+  scene point light 3: pos [0, 0, 0]  colour [0, 0, 0]  near 0  far 0
+  after scalar upload, the array reads back as 0 0 0 0
+  element 3 alone: loc -1 = 0
+  sampler for light 1: loc 190 = 2  error now INVALID_OPERATION 0x502
+phase 0  layer vis_margin  -> _probe/pl/out/bv_vis_margin_p0.ppm  error: NO_ERROR
+  upload: dir lights 1  point lights 1  units 1 .. 2
+  scene point lights: count 1  intensities 2.4 0 0 0
+  scene point light 3: pos [0, 0, 0]  colour [0, 0, 0]  near 0  far 0
+  after scalar upload, the array reads back as 0 0 0 0
+  element 3 alone: loc -1 = 0
+  sampler for light 1: loc 190 = 2  error now INVALID_OPERATION 0x502
+phase 0.25  layer vis_only  -> _probe/pl/out/bv_vis_only_p0.25.ppm  error: NO_ERROR
+  upload: dir lights 1  point lights 1  units 1 .. 2
+  scene point lights: count 1  intensities 2.4 0 0 0
+  scene point light 3: pos [0, 0, 0]  colour [0, 0, 0]  near 0  far 0
+  after scalar upload, the array reads back as 0 0 0 0
+  element 3 alone: loc -1 = 0
+  sampler for light 1: loc 190 = 2  error now INVALID_OPERATION 0x502
+phase 0.25  layer vis_depth  -> _probe/pl/out/bv_vis_depth_p0.25.ppm  error: NO_ERROR
+  upload: dir lights 1  point lights 1  units 1 .. 2
+  scene point lights: count 1  intensities 2.4 0 0 0
+  scene point light 3: pos [0, 0, 0]  colour [0, 0, 0]  near 0  far 0
+  after scalar upload, the array reads back as 0 0 0 0
+  element 3 alone: loc -1 = 0
+  sampler for light 1: loc 190 = 2  error now INVALID_OPERATION 0x502
+phase 0.25  layer vis_axis  -> _probe/pl/out/bv_vis_axis_p0.25.ppm  error: NO_ERROR
+  upload: dir lights 1  point lights 1  units 1 .. 2
+  scene point lights: count 1  intensities 2.4 0 0 0
+  scene point light 3: pos [0, 0, 0]  colour [0, 0, 0]  near 0  far 0
+  after scalar upload, the array reads back as 0 0 0 0
+  element 3 alone: loc -1 = 0
+  sampler for light 1: loc 190 = 2  error now INVALID_OPERATION 0x502
+phase 0.25  layer vis_bias  -> _probe/pl/out/bv_vis_bias_p0.25.ppm  error: NO_ERROR
+  upload: dir lights 1  point lights 1  units 1 .. 2
+  scene point lights: count 1  intensities 2.4 0 0 0
+  scene point light 3: pos [0, 0, 0]  colour [0, 0, 0]  near 0  far 0
+  after scalar upload, the array reads back as 0 0 0 0
+  element 3 alone: loc -1 = 0
+  sampler for light 1: loc 190 = 2  error now INVALID_OPERATION 0x502
+phase 0.25  layer vis_stored  -> _probe/pl/out/bv_vis_stored_p0.25.ppm  error: NO_ERROR
+  upload: dir lights 1  point lights 1  units 1 .. 2
+  scene point lights: count 1  intensities 2.4 0 0 0
+  scene point light 3: pos [0, 0, 0]  colour [0, 0, 0]  near 0  far 0
+  after scalar upload, the array reads back as 0 0 0 0
+  element 3 alone: loc -1 = 0
+  sampler for light 1: loc 190 = 2  error now INVALID_OPERATION 0x502
+phase 0.25  layer vis_margin  -> _probe/pl/out/bv_vis_margin_p0.25.ppm  error: NO_ERROR
+done

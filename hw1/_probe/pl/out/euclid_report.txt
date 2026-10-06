@@ -1,0 +1,2 @@
+wrote _probe/pl/out/euclid.ppm from the project's own Render() with _probe_euclid.frag
+done
