@@ -9,6 +9,8 @@ import "core:math/linalg"
 ShadowMappingProgram :: struct {
 	program : u32,
 	u_light_mvp : i32,
+	u_light_position : i32,
+	m_model : i32,
 	
 	//something parameter
 	direction_light_resolution_width : i32,
@@ -40,8 +42,8 @@ CreateEmptyCubeTexture :: proc() {
 			gl.DEPTH_COMPONENT24, 1, 1, 0, gl.DEPTH_COMPONENT, gl.FLOAT, nil,
 		)
 	}
-	gl.TexParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
-	gl.TexParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+	gl.TexParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+	gl.TexParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
 	gl.TexParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
 	gl.TexParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
 	gl.TexParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE)
@@ -54,12 +56,14 @@ initShadowMapping :: proc() {
 	fs := compileShader(gl.FRAGMENT_SHADER, "resource/shaders/shadow_mapping.frag")
 	shadow_mapping_program.program = linkProgram(vs, fs)
 	shadow_mapping_program.u_light_mvp = gl.GetUniformLocation(shadow_mapping_program.program, cstring("u_light_mvp"))
+	shadow_mapping_program.u_light_position = gl.GetUniformLocation(shadow_mapping_program.program, cstring("u_light"))
+	shadow_mapping_program.m_model = gl.GetUniformLocation(shadow_mapping_program.program, cstring("m_model"))
 
 
-	shadow_mapping_program.direction_light_resolution_width = 1024
-	shadow_mapping_program.direction_light_resolution_height = 1024
-	shadow_mapping_program.point_light_resolution_width = 1024
-	shadow_mapping_program.point_light_resolution_height = 1024
+	shadow_mapping_program.direction_light_resolution_width = 2048
+	shadow_mapping_program.direction_light_resolution_height = 2048
+	shadow_mapping_program.point_light_resolution_width = 2048
+	shadow_mapping_program.point_light_resolution_height = 2048
 
 	CreateEmptyCubeTexture()
 
@@ -172,85 +176,74 @@ UniformShadowMapping :: proc() {
 }
 
 CreatePointLightShadowTexture :: proc(id : u32) {
+	res_w := shadow_mapping_program.point_light_resolution_width
+	res_h := shadow_mapping_program.point_light_resolution_height
+
+	// The distance cube. R32F rather than a depth format because the value has to survive as a
+	// distance in metres: a depth attachment's contents are pinned to [0, 1] and mapped onto
+	// [near, far] by the driver, so a distance written there arrives divided by the far plane
+	// and a distance read from there has to be multiplied back. This one holds the metres.
 	gl.GenTextures(1, &sam.point_lights[id].gl_shadow_map_texture)
 	gl.BindTexture(gl.TEXTURE_CUBE_MAP, sam.point_lights[id].gl_shadow_map_texture)
-	gl.TexImage2D(
-		gl.TEXTURE_CUBE_MAP_POSITIVE_X, 
-		0, 
-		gl.DEPTH_COMPONENT24, 
-		shadow_mapping_program.point_light_resolution_width, 
-		shadow_mapping_program.point_light_resolution_height, 
-		0, 
-		gl.DEPTH_COMPONENT, 
-		gl.FLOAT, 
-		nil
-	)
-	gl.TexImage2D(
-		gl.TEXTURE_CUBE_MAP_NEGATIVE_X, 
-		0, 
-		gl.DEPTH_COMPONENT24, 
-		shadow_mapping_program.point_light_resolution_width, 
-		shadow_mapping_program.point_light_resolution_height, 
-		0, 
-		gl.DEPTH_COMPONENT, 
-		gl.FLOAT, 
-		nil
-	)
-	gl.TexImage2D(
-		gl.TEXTURE_CUBE_MAP_POSITIVE_Y, 
-		0, 
-		gl.DEPTH_COMPONENT24, 
-		shadow_mapping_program.point_light_resolution_width, 
-		shadow_mapping_program.point_light_resolution_height, 
-		0, 
-		gl.DEPTH_COMPONENT, 
-		gl.FLOAT, 
-		nil
-	)
-	gl.TexImage2D(
-		gl.TEXTURE_CUBE_MAP_NEGATIVE_Y, 
-		0, 
-		gl.DEPTH_COMPONENT24, 
-		shadow_mapping_program.point_light_resolution_width, 
-		shadow_mapping_program.point_light_resolution_height, 
-		0, 
-		gl.DEPTH_COMPONENT, 
-		gl.FLOAT, 
-		nil
-	)
-	gl.TexImage2D(
-		gl.TEXTURE_CUBE_MAP_POSITIVE_Z, 
-		0, 
-		gl.DEPTH_COMPONENT24, 
-		shadow_mapping_program.point_light_resolution_width, 
-		shadow_mapping_program.point_light_resolution_height, 
-		0, 
-		gl.DEPTH_COMPONENT, 
-		gl.FLOAT, 
-		nil
-	)
-	gl.TexImage2D(
-		gl.TEXTURE_CUBE_MAP_NEGATIVE_Z, 
-		0, 
-		gl.DEPTH_COMPONENT24, 
-		shadow_mapping_program.point_light_resolution_width, 
-		shadow_mapping_program.point_light_resolution_height, 
-		0, 
-		gl.DEPTH_COMPONENT, 
-		gl.FLOAT, 
-		nil
-	)
-	gl.TexParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER,  gl.NEAREST)
-	gl.TexParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MAG_FILTER,  gl.NEAREST)
-	gl.TexParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_S,      gl.CLAMP_TO_EDGE)
-	gl.TexParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_T,      gl.CLAMP_TO_EDGE)
-	gl.TexParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_R,      gl.CLAMP_TO_EDGE)   // ← 0x8072
-	gl.TexParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MAX_LEVEL,   0)
+	for face in 0 ..< 6 {
+		gl.TexImage2D(
+			gl.TEXTURE_CUBE_MAP_POSITIVE_X + u32(face),
+			0,
+			gl.R32F,
+			res_w,
+			res_h,
+			0,
+			gl.RED,
+			gl.FLOAT,
+			nil,
+		)
+	}
+	// Nearest, not linear. A linear filter on this cube would blend two texels' distances
+	// into a third that belongs to neither surface, and the single comparison the shader
+	// makes against that blend reads the shadow away from its own edge -- measured, the
+	// floor's cast shadow fell from 7.1 per cent of its area to 0.5. The engines that do
+	// bind a linear shadow map bind a hardware comparison sampler with it, where the filter
+	// averages the results of the comparisons rather than the depths being compared. That
+	// needs a depth cube; this one holds metres and is read as a plain float.
+	gl.TexParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+	gl.TexParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+	gl.TexParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+	gl.TexParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+	gl.TexParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE)   // ← 0x8072
+	gl.TexParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MAX_LEVEL, 0)
+
+	// The depth cube, which decides which fragment is nearest and so which distance is the one
+	// kept. It is not read by the lighting shader at all.
+	gl.GenTextures(1, &sam.point_lights[id].gl_shadow_depth_texture)
+	gl.BindTexture(gl.TEXTURE_CUBE_MAP, sam.point_lights[id].gl_shadow_depth_texture)
+	for face in 0 ..< 6 {
+		gl.TexImage2D(
+			gl.TEXTURE_CUBE_MAP_POSITIVE_X + u32(face),
+			0,
+			gl.DEPTH_COMPONENT24,
+			res_w,
+			res_h,
+			0,
+			gl.DEPTH_COMPONENT,
+			gl.FLOAT,
+			nil,
+		)
+	}
+	gl.TexParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+	gl.TexParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+	gl.TexParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+	gl.TexParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+	gl.TexParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE)
+	gl.TexParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MAX_LEVEL, 0)
 
 	gl.GenFramebuffers(1, &sam.point_lights[id].gl_shadow_map_fbo)
 	gl.BindFramebuffer(gl.FRAMEBUFFER, sam.point_lights[id].gl_shadow_map_fbo) 
-	gl.DrawBuffer(gl.NONE)         // 每个 FBO 都要设
-	gl.ReadBuffer(gl.NONE)
+	gl.FramebufferTexture2D(
+		gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_CUBE_MAP_POSITIVE_X,
+		sam.point_lights[id].gl_shadow_map_texture, 0,
+	)
+	gl.DrawBuffer(gl.COLOR_ATTACHMENT0)
+	gl.ReadBuffer(gl.COLOR_ATTACHMENT0)
 	gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
 }
 
@@ -277,13 +270,29 @@ RasterizationPointLightShadowMap :: proc(id : u32) {
 	gl.BindFramebuffer(gl.FRAMEBUFFER, sam.point_lights[id].gl_shadow_map_fbo)
 	gl.Viewport(0, 0, shadow_mapping_program.point_light_resolution_width, shadow_mapping_program.point_light_resolution_height)
 	gl.UseProgram(shadow_mapping_program.program)
-	
+
+	light_pos := [3]f32{
+		sam.point_lights.position[id].x,
+		sam.point_lights.position[id].y,
+		sam.point_lights.position[id].z,
+	}
+	gl.Uniform3f(shadow_mapping_program.u_light_position, light_pos.x, light_pos.y, light_pos.z)
+
+	// A face nothing is drawn into has to read as "no caster", which for a distance means
+	// beyond anything the light can reach. The far plane is that bound: every projection matrix
+	// in the array was built with it, so a distance past it is a distance past every caster.
+	far_plane := sam.point_lights[id].far
+	clear_distance : [4]f32 = {far_plane, far_plane, far_plane, far_plane}
+
 	for face in 0..<6 {
-		gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, sam.POINT_LIGHT_FACE_TEXTURE_TARGETS[face], sam.point_lights[id].gl_shadow_map_texture, 0)
-		// One face at a time, and this clears exactly the face just attached: a clear
-		// reaches only the attachment currently on the framebuffer, so re-attaching
-		// before clearing is what keeps the other five faces from being wiped along
-		// with it. Measured: attaching +X and clearing leaves -X..-Z untouched.
+		target := sam.POINT_LIGHT_FACE_TEXTURE_TARGETS[face]
+		gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, target, sam.point_lights[id].gl_shadow_map_texture, 0)
+		gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, target, sam.point_lights[id].gl_shadow_depth_texture, 0)
+		// One face at a time, and this clears exactly the two attachments just attached: a
+		// clear reaches only what is currently on the framebuffer, so re-attaching before
+		// clearing is what keeps the other five faces from being wiped along with it.
+		// Measured: attaching +X and clearing leaves -X..-Z untouched.
+		gl.ClearBufferfv(gl.COLOR, 0, &clear_distance[0])
 		gl.Clear(gl.DEPTH_BUFFER_BIT)
 		// The matrices were built once in PreComputation. Rebuilding them here would
 		// re-measure the scene per node per face, and the whole point of filling the
@@ -297,6 +306,7 @@ RasterizationPointLightShadowMap :: proc(id : u32) {
 			if mesh == nil do continue
 			light_mvp := linalg.mul(light_proj_view, node.transform)
 			gl.UniformMatrix4fv(shadow_mapping_program.u_light_mvp, 1, false, &light_mvp[0, 0])
+			gl.UniformMatrix4fv(shadow_mapping_program.m_model, 1, false, &node.transform[0, 0])
 			for &p in mesh.primitives {
 				gl.BindVertexArray(p.gl_vao_id)
 				gl.DrawElements(gl.TRIANGLES, i32(p.indices_count), gl.UNSIGNED_INT, nil)

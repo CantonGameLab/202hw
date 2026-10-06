@@ -102,7 +102,7 @@ InitScene :: proc() {
 
 	sam.direction_lights.position[DIRECTIONAL_LIGHT]  = {2.0, 3.0, 2.0}
 	sam.direction_lights.direction[DIRECTIONAL_LIGHT] = {-0.6, -0.529, -0.6}
-	sam.direction_lights.color[DIRECTIONAL_LIGHT]     = {1.0, 0.96, 0.90}
+	sam.direction_lights.color[DIRECTIONAL_LIGHT]     = {1.0, 0.26, 0.10}
 	sam.direction_lights.intensity[DIRECTIONAL_LIGHT] = 0.
 	sam.direction_light_count = 1
 
@@ -110,8 +110,8 @@ InitScene :: proc() {
 	POINT_LIGHT_FRONT_RIGHT :: 0
 
 	sam.point_lights.position[POINT_LIGHT_FRONT_RIGHT] = { 0., POINT_LIGHT_HEIGHT, 0.}
-	sam.point_lights.color[POINT_LIGHT_FRONT_RIGHT] = {1.00, 0.93, 0.82}
-	sam.point_lights.intensity[POINT_LIGHT_FRONT_RIGHT] = 10.
+	sam.point_lights.color[POINT_LIGHT_FRONT_RIGHT] = {1.00, 0.63, 0.82}
+	sam.point_lights.intensity[POINT_LIGHT_FRONT_RIGHT] = 40.
 
 	point_light_entity.point_index = 0
 	point_light_entity.position = { 0., POINT_LIGHT_HEIGHT, 0.} 
@@ -163,7 +163,7 @@ Update :: proc(delta : f64) {
 
 	sam.Main_Camera.transform = world
 
-	light_xz_length : f32 = math.sqrt(f32(2)) * 3.
-	point_light_entity.position = [3]f32{math.cos(f32_global_time), 0.5, math.sin(f32_global_time)} * light_xz_length
+	light_xz_length : f32 = math.sqrt(f32(2)) * 4.
+	point_light_entity.position = [3]f32{math.cos(0.2 * f32_global_time) * light_xz_length, 0.9, math.sin(0.2 * f32_global_time) * light_xz_length}
 	sam.point_lights[point_light_entity.point_index].position = point_light_entity.position
 }

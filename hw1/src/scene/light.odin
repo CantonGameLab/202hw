@@ -35,6 +35,7 @@ PointLight :: struct {
 	intensity:             f32,
 	gl_shadow_map_fbo:     u32,
 	gl_shadow_map_texture: u32,
+	gl_shadow_depth_texture: u32,
 	using camera : LightCamera,
 	proj_views : [6]Transform,
 }
