@@ -20,6 +20,8 @@ ShadowMappingProgram :: struct {
 	point_light_resolution_height : i32,
 }
 
+POINT_LIGHT_PCF_TAPS :: 512
+
 shadow_mapping_program : ShadowMappingProgram
 
 // The texture units the shadow maps occupy. Unit 0 is taken by the material's base
@@ -102,6 +104,7 @@ initShadowMapping :: proc() {
 	program.u_point_light_intensities = gl.GetUniformLocation(program.program, cstring("u_point_light_intensities"))
 	program.u_point_light_has_shadow = gl.GetUniformLocation(program.program, cstring("u_point_light_has_shadow"))
 	program.u_point_light_width = gl.GetUniformLocation(program.program, cstring("u_point_light_width"))
+	program.u_point_light_taps = gl.GetUniformLocation(program.program, cstring("u_point_light_taps"))
 }
 
 
@@ -193,6 +196,7 @@ UniformShadowMapping :: proc() {
 	
 	gl.Uniform1iv(program.u_point_light_has_shadow, sam.MAX_POINT_LIGHT_COUNT, &has_point_light_shadow[0])
 	gl.Uniform1i(program.u_point_light_count, i32(sam.point_light_count))
+	gl.Uniform1i(program.u_point_light_taps, POINT_LIGHT_PCF_TAPS)
 
 	if sam.point_light_count > 0 {
 		gl.Uniform3fv(
