@@ -37,9 +37,8 @@ PBRProgram :: struct {
 	u_point_light_positions : i32,
 	u_point_light_colors : i32,
 	u_point_light_intensities : i32,
-	u_point_light_nears : [sam.MAX_POINT_LIGHT_COUNT]i32,
-	u_point_light_fars : [sam.MAX_POINT_LIGHT_COUNT]i32,
 	u_point_light_has_shadow : i32,
+	u_point_light_width : i32,
 	u_point_light_shadow_maps : [sam.MAX_POINT_LIGHT_COUNT]i32,
 
 	u_camera_transform : i32,

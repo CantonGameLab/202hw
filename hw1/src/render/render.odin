@@ -111,6 +111,9 @@ Init :: proc() -> bool {
 	s3.GL_SetAttribute(.DOUBLEBUFFER, 1)
 	s3.GL_SetAttribute(.MULTISAMPLEBUFFERS, 1)
 	s3.GL_SetAttribute(.MULTISAMPLESAMPLES, 4)
+	// Asked for, then checked further down. The window's colour buffer has to be an sRGB
+	// format or glEnable(GL_FRAMEBUFFER_SRGB) does nothing at all and says nothing about it.
+	s3.GL_SetAttribute(.FRAMEBUFFER_SRGB_CAPABLE, 1)
 
 	if !s3.Init({.VIDEO}) {
 		fmt.eprintln("SDL3 init failed. Guess what? I won't serve you anymore! GO using other terminal emulator such as the WINDOW TERMINAL. This is who specially prepared for users like YOU.", s3.GetError())
@@ -126,12 +129,14 @@ Init :: proc() -> bool {
 
 	if window == nil {
 		fmt.eprintln("FAILED FAILED and FAILED. You can't just create A window! Congratulations!", s3.GetError())
+		fmt.eprintln("If this is the FRAMEBUFFER_SRGB_CAPABLE request above, delete that line: the renderer will start without an sRGB window, but its output will be too dark.")
 		return false
 	}
 
 	gl_context = s3.GL_CreateContext(window)
 	if gl_context == nil {
 		fmt.eprintln("The Khronos say: You don's even deserve to have an available GL_Context.", s3.GetError())
+		fmt.eprintln("If this is the FRAMEBUFFER_SRGB_CAPABLE request above, delete that line: the renderer will start without an sRGB window, but its output will be too dark.")
 		return false
 	}
 
@@ -154,6 +159,23 @@ Init :: proc() -> bool {
 	gl.Enable(gl.MULTISAMPLE)
 	gl.Enable(gl.CULL_FACE)
 
+	// The lighting shader hands on linear radiance and fullscreen.frag ends in a value for an
+	// sRGB display, so the window's colour buffer is where that value gets encoded.
+	//
+	// The check is against SDL's answer and not against the GL one. Measured on this driver:
+	// glGetFramebufferAttachmentParameteriv(GL_FRAMEBUFFER, GL_BACK_LEFT,
+	// GL_FRAMEBUFFER_ATTACHMENT_COLOR_ENCODING) returns GL_LINEAR while a glClear of 0.5
+	// demonstrably lands as 188, so the GL query reports the pixel format's declared encoding
+	// rather than what the write does, and asserting on it would fire on a pipeline that is
+	// working. SDL's attribute answers "is the visual sRGB capable", which is the condition the
+	// encode actually depends on.
+	gl.Enable(gl.FRAMEBUFFER_SRGB)
+	srgb_capable : i32
+	s3.GL_GetAttribute(.FRAMEBUFFER_SRGB_CAPABLE, &srgb_capable)
+	if srgb_capable != 1 {
+		fmt.eprintln("[!] the window is not sRGB capable, so GL_FRAMEBUFFER_SRGB does nothing and the image will be too dark. Remove the FRAMEBUFFER_SRGB_CAPABLE request in render.Init, or the request and the driver disagree.")
+	}
+	
 	gl.DepthFunc(gl.LESS)
 	gl.CullFace(gl.BACK)
 	gl.FrontFace(gl.CCW)

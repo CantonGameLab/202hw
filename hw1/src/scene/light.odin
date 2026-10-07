@@ -22,6 +22,7 @@ DirectionLight :: struct {
 	direction:             [3]f32,
 	color:                 [3]f32,
 	intensity:             f32,
+
 	gl_shadow_map_texture: u32,
 	gl_shadow_map_fbo:     u32,
 
@@ -33,6 +34,11 @@ PointLight :: struct {
 	position:              [3]f32,
 	color:                 [3]f32,
 	intensity:             f32,
+
+	light_node_id:         u32,
+
+	pcss_width : f32,
+
 	gl_shadow_map_fbo:     u32,
 	gl_shadow_map_texture: u32,
 	gl_shadow_depth_texture: u32,
@@ -112,6 +118,26 @@ PointLightProjViewMat :: proc(
 
 	proj := linalg.matrix4_perspective_f32(math.PI * 0.5, 1, z_near, z_far)
 	return linalg.mul(proj, view)
+}
+
+
+PointLightFaceNear :: proc(light_pos: [3]f32, world: AABB, face: int) -> f32 {
+	lo := [3]f32{world.minmax_offset_x[0], world.minmax_offset_y[0], world.minmax_offset_z[0]}
+	hi := [3]f32{world.minmax_offset_x[1], world.minmax_offset_y[1], world.minmax_offset_z[1]}
+	dir := POINT_LIGHT_FACE_DIRECTIONS[face]
+
+	nearest := max(f32)
+	for i in 0 ..< 8 {
+		corner := [3]f32{
+			(i & 1) == 0 ? lo.x : hi.x,
+			((i >> 1) & 1) == 0 ? lo.y : hi.y,
+			((i >> 2) & 1) == 0 ? lo.z : hi.z,
+		}
+		nearest = min(nearest, linalg.dot(corner - light_pos, dir))
+	}
+
+	half_diagonal := linalg.length(hi - lo) * 0.5
+	return math.max(nearest, half_diagonal * 0.01)
 }
 
 

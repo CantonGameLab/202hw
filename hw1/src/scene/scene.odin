@@ -128,9 +128,6 @@ PreComputation :: proc() {
 	}
 
 	for i in u32(0) ..< point_light_count {
-		// One depth range for all six faces, measured from the world box. Measuring it
-		// per face would give six ranges, and a stored depth from one face would then
-		// be compared against another face's scale.
 		z_near, z_far := PointLightDepthRange(point_lights[i].position, world)
 
 		point_lights[i].near = z_near
@@ -140,10 +137,11 @@ PreComputation :: proc() {
 		point_lights[i].fov_y = math.PI * 0.5
 
 		for face in 0 ..< 6 {
+			face_near := PointLightFaceNear(point_lights[i].position, world, face)
 			point_lights[i].proj_views[face] = PointLightProjViewMat(
 				point_lights[i].position,
 				face,
-				z_near,
+				face_near,
 				z_far,
 			)
 		}

@@ -22,7 +22,7 @@ ZERO3				:: [3]f32{0., 0., 0.}
 
 Entity :: struct {
 	using node : Node,
-	node_id : u32,
+	node_index : u32,
 }
 
 entities : me.GenArray(MAX_ENTITY_COUNT, Entity)
@@ -43,6 +43,8 @@ CameraEntity :: struct {
 PointLightEntity :: struct {
 	position : [3]f32,
 	point_index : u32,
+	node_index : u32,
+	using node : Node,
 }
 
 point_light_entity : PointLightEntity
@@ -52,28 +54,23 @@ main_camera_entity : CameraEntity
 global_time : f64
 
 InitScene :: proc() {
+	
 	marble_bust_model_path := "resource/assets/marble_bust_model/marble_bust_01_4k.gltf"
 	mesh_id_, ret := sam.LoadAGLTFToAMesh(marble_bust_model_path)
-	if ret != .Success {
-		fmt.eprintln("Something goes wrong guys!")
-	}
 	marble_bust_entity.mesh_id = mesh_id_
 	marble_bust_entity.transform = 1
 	me.RefRetain(&sam.meshes, mesh_id_)
-	marble_bust_entity.node_id = me.ArrayAlloc(&sam.nodes)
-	node := me.ArrayGet(&sam.nodes, marble_bust_entity.node_id)
+	marble_bust_entity.node_index = me.ArrayAlloc(&sam.nodes)
+	node := me.ArrayGet(&sam.nodes, marble_bust_entity.node_index)
 	node^ = marble_bust_entity.node
 
 	floor_model_path := "resource/assets/stone_floor/stone_floor.gltf"
 	floor_mesh_id, floor_ret := sam.LoadAGLTFToAMesh(floor_model_path)
-	if floor_ret != .Success {
-		fmt.eprintln("[x] the floor asset failed to load:", floor_ret)
-	}
 	floor_entity.mesh_id = floor_mesh_id
 	floor_entity.transform = 1
 	me.RefRetain(&sam.meshes, floor_mesh_id)
-	floor_entity.node_id = me.ArrayAlloc(&sam.nodes)
-	floor_node := me.ArrayGet(&sam.nodes, floor_entity.node_id)
+	floor_entity.node_index = me.ArrayAlloc(&sam.nodes)
+	floor_node := me.ArrayGet(&sam.nodes, floor_entity.node_index)
 	floor_node^ = floor_entity.node
 
 	target := linalg.Vector3f32{0.0, 0.23, 0.0}
@@ -85,7 +82,7 @@ InitScene :: proc() {
 	sam.Main_Camera.far = 1000
 
 	main_camera_entity.move_speed = 0.5
-	main_camera_entity.rotate_speed = 45
+	main_camera_entity.rotate_speed = 45.
 	main_camera_entity.position = eye
 
 	forward_initial := linalg.vector_normalize(target - eye)
@@ -96,25 +93,26 @@ InitScene :: proc() {
 		linalg.matrix4_look_at_f32(main_camera_entity.position, target, up)
 	)
 
-	DIRECTIONAL_LIGHT :: 0
-	FILL_LIGHT        :: 1
-	RIM_LIGHT         :: 2
 
-	sam.direction_lights.position[DIRECTIONAL_LIGHT]  = {2.0, 3.0, 2.0}
-	sam.direction_lights.direction[DIRECTIONAL_LIGHT] = {-0.6, -0.529, -0.6}
-	sam.direction_lights.color[DIRECTIONAL_LIGHT]     = {1.0, 0.26, 0.10}
-	sam.direction_lights.intensity[DIRECTIONAL_LIGHT] = 0.
-	sam.direction_light_count = 1
-
-	POINT_LIGHT_HEIGHT :: 0.8
-	POINT_LIGHT_FRONT_RIGHT :: 0
-
-	sam.point_lights.position[POINT_LIGHT_FRONT_RIGHT] = { 0., POINT_LIGHT_HEIGHT, 0.}
-	sam.point_lights.color[POINT_LIGHT_FRONT_RIGHT] = {1.00, 0.63, 0.82}
-	sam.point_lights.intensity[POINT_LIGHT_FRONT_RIGHT] = 40.
+	sam.point_lights[0].color = {1.00, 0.93, 0.92}
+	sam.point_lights[0].intensity = 1.4
+	sam.point_lights[0].pcss_width = 0.05
 
 	point_light_entity.point_index = 0
-	point_light_entity.position = { 0., POINT_LIGHT_HEIGHT, 0.} 
+
+	light_ball_model_path := "resource/assets/light_ball/light_ball.gltf"
+	light_ball_mesh_id, light_ball_ret := sam.LoadAGLTFToAMesh(light_ball_model_path)
+	if light_ball_ret != .Success {
+		fmt.eprintln("[x] the light ball asset failed to load:", light_ball_ret)
+	}
+	point_light_entity.mesh_id = light_ball_mesh_id
+	point_light_entity.transform = linalg.matrix4_translate_f32(point_light_entity.position)
+	me.RefRetain(&sam.meshes, light_ball_mesh_id)
+	point_light_entity.node_index = me.ArrayAlloc(&sam.nodes)
+	light_ball_node := me.ArrayGet(&sam.nodes, point_light_entity.node_index)
+	light_ball_node^ = point_light_entity.node
+
+	sam.point_lights[0].light_node_id = point_light_entity.node_index
 
 	sam.point_light_count = 1
 }
@@ -163,7 +161,11 @@ Update :: proc(delta : f64) {
 
 	sam.Main_Camera.transform = world
 
-	light_xz_length : f32 = math.sqrt(f32(2)) * 4.
-	point_light_entity.position = [3]f32{math.cos(0.2 * f32_global_time) * light_xz_length, 0.9, math.sin(0.2 * f32_global_time) * light_xz_length}
+	light_xz_length : f32 = math.sqrt(f32(2)) * 0.6
+	light_rotate_speed : f32 = 0.1
+	point_light_entity.position = [3]f32{math.cos(light_rotate_speed * f32_global_time) * light_xz_length, 0.9, math.sin(light_rotate_speed * f32_global_time) * light_xz_length}
 	sam.point_lights[point_light_entity.point_index].position = point_light_entity.position
+	point_light_entity.transform = linalg.matrix4_translate_f32(point_light_entity.position)
+	light_ball_node := me.ArrayGet(&sam.nodes, point_light_entity.node_index)
+	light_ball_node^ = point_light_entity.node
 }

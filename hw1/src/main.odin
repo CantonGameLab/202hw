@@ -12,7 +12,7 @@ now_seconds : f64
 last_seconds : f64
 
 getTime :: proc() -> f64 {
-	return f64(s3.GetTicksNS()) / 1e9
+	return f64(s3.GetTicksNS()) / f64(1e9)
 }
 
 main :: proc() {
