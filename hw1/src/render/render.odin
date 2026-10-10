@@ -20,8 +20,9 @@ gl_context : s3.GLContext
 
 InitShader :: proc() {
 	initPBR()
-	initMSAA()
+	initAfter()
 	initShadowMapping()
+	initBloom()
 }
 
 GetWindowSize :: proc() -> (w : u32, h : u32) {
@@ -40,15 +41,16 @@ Render :: proc() {
 
 	RasterizeShadowMap()
 	UniformShadowMapping()
-	MSAABind()
+	bindAfter()
 	for i := u32(1); i <= sam.nodes.next; i += 1 {
 		if !sam.nodes.in_use[i] {
 			continue
 		}
 		DrawPBRNode(i, w, h)
 	}
-	MSAAResolve()
-	BlitToFramebuffer(0, msaa.tex_resolved, i32(w), i32(h))
+	resolveAfter()
+	resolveBloom()
+	BlitToFramebuffer(0, after.tex_resolved, i32(w), i32(h))
 
 	s3.GL_SwapWindow(window)
 }

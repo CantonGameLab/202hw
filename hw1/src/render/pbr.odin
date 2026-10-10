@@ -100,8 +100,8 @@ DrawPBRNode :: proc(id : u32, w, h : u32) {
 }
 
 initPBR :: proc() {
-	program.vs = compileShader(gl.VERTEX_SHADER, "resource/shaders/no_light.vert")
-	program.fs = compileShader(gl.FRAGMENT_SHADER, "resource/shaders/no_light.frag")
+	program.vs = compileShader(gl.VERTEX_SHADER, "resource/shaders/pbr.vert")
+	program.fs = compileShader(gl.FRAGMENT_SHADER, "resource/shaders/pbr.frag")
 	program.program = linkProgram(program.vs, program.fs)
 	program.m_proj = gl.GetUniformLocation(program.program, cstring("m_proj"))
 	program.m_view = gl.GetUniformLocation(program.program, cstring("m_view"))
