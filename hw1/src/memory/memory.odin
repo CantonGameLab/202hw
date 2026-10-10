@@ -1,5 +1,10 @@
 package memory
 
+Value :: struct ($V : typeid, $H : typeid) {
+	valve : ^V,
+	id : H,
+}
+
 Array :: struct ($N : u32, $T : typeid) {
 	data : [N]T,
 	pool : [N]u32,

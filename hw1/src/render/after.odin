@@ -7,7 +7,7 @@ import "core:os"
 
 MSAA_SAMPLES :: 4
 
-AfterPass :: struct {
+AfterState :: struct {
 	multisample_fbo : u32,
 	rbo_color : u32,
 	rbo_depth : u32,
@@ -18,7 +18,7 @@ AfterPass :: struct {
 	height : i32,
 }
 
-after : AfterPass
+after : AfterState
 blit_program : u32
 
 initAfter :: proc() {

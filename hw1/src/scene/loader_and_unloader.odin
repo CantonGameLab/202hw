@@ -35,7 +35,7 @@ LoadResult :: enum {
 // VAO/VBO/EBO triple per renderable node. The handles land in
 // Texture.gl_texture_id and Primitive.gl_vao_id / gl_vbo_id / gl_ebo_id, and the
 // loader frees the CPU-side copies as soon as they are uploaded.
-LoadAGLTFToAMesh :: proc(path : string) -> (mesh_id : u32, ret : LoadResult) {
+LoadglTFMesh :: proc(path : string) -> (mesh_id : u32, ret : LoadResult) {
 	cpath := strings.clone_to_cstring(path)
 	defer delete(cpath)
 	data, result := cgltf.parse_file(cgltf.options{},cpath)
@@ -226,6 +226,7 @@ LoadAGLTFToAMesh :: proc(path : string) -> (mesh_id : u32, ret : LoadResult) {
 			metallic_factor = m.pbr_metallic_roughness.metallic_factor,
 			roughness_factor = m.pbr_metallic_roughness.roughness_factor,
 			emissive_factor = m.emissive_factor,
+			emissive_strength = m.has_emissive_strength ? m.emissive_strength.emissive_strength : 1.0,
 			alpha_cutoff = m.alpha_cutoff,
 			alpha_mode = gltfAlphaModeToMine(m.alpha_mode),
 			double_sided = b8(m.double_sided),

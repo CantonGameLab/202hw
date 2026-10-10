@@ -19,16 +19,14 @@ Transform :: matrix[4,4]f32
 MAX_ENTITY_COUNT	:: 2000
 ZERO3				:: [3]f32{0., 0., 0.}
 
-
-Entity :: struct {
-	using node : Node,
+NodeHandle :: struct {
+	using node : ^Node,
 	node_index : u32,
 }
 
-entities : me.GenArray(MAX_ENTITY_COUNT, Entity)
-
-marble_bust_entity : Entity
-floor_entity : Entity
+Entity :: struct {
+	using node_handle : NodeHandle
+}
 
 CameraEntity :: struct {
 	//parameters
@@ -43,35 +41,41 @@ CameraEntity :: struct {
 PointLightEntity :: struct {
 	position : [3]f32,
 	point_index : u32,
-	node_index : u32,
-	using node : Node,
+	using node_handle : NodeHandle,
 }
 
+entities : me.GenArray(MAX_ENTITY_COUNT, Entity)
+marble_bust_entity : Entity
+floor_entity : Entity
 point_light_entity : PointLightEntity
-
 main_camera_entity : CameraEntity
-
 global_time : f64
+
+createNode :: proc(node_handle : ^NodeHandle) {
+	node_handle.node_index = me.ArrayAlloc(&sam.nodes)
+	node_handle.node = me.ArrayGet(&sam.nodes, node_handle.node_index)
+}
 
 InitScene :: proc() {
 	
 	marble_bust_model_path := "resource/assets/marble_bust_model/marble_bust_01_4k.gltf"
-	mesh_id_, ret := sam.LoadAGLTFToAMesh(marble_bust_model_path)
+	mesh_id_, ret := sam.LoadglTFMesh(marble_bust_model_path)
+
+	createNode(&marble_bust_entity.node_handle)
+
 	marble_bust_entity.mesh_id = mesh_id_
 	marble_bust_entity.transform = 1
 	me.RefRetain(&sam.meshes, mesh_id_)
-	marble_bust_entity.node_index = me.ArrayAlloc(&sam.nodes)
-	node := me.ArrayGet(&sam.nodes, marble_bust_entity.node_index)
-	node^ = marble_bust_entity.node
 
 	floor_model_path := "resource/assets/stone_floor/stone_floor.gltf"
-	floor_mesh_id, floor_ret := sam.LoadAGLTFToAMesh(floor_model_path)
+	floor_mesh_id, floor_ret := sam.LoadglTFMesh(floor_model_path)
+	
+	createNode(&floor_entity.node_handle)
+
 	floor_entity.mesh_id = floor_mesh_id
 	floor_entity.transform = 1
 	me.RefRetain(&sam.meshes, floor_mesh_id)
-	floor_entity.node_index = me.ArrayAlloc(&sam.nodes)
-	floor_node := me.ArrayGet(&sam.nodes, floor_entity.node_index)
-	floor_node^ = floor_entity.node
+
 
 	target := linalg.Vector3f32{0.0, 0.23, 0.0}
 	up := linalg.Vector3f32{0.0, 1.0, 0.0}
@@ -93,7 +97,6 @@ InitScene :: proc() {
 		linalg.matrix4_look_at_f32(main_camera_entity.position, target, up)
 	)
 
-
 	sam.point_lights[0].color = {1.00, 0.93, 0.92}
 	sam.point_lights[0].intensity = 1.4
 	sam.point_lights[0].pcss_width = 0.05
@@ -101,16 +104,11 @@ InitScene :: proc() {
 	point_light_entity.point_index = 0
 
 	light_ball_model_path := "resource/assets/light_ball/light_ball.gltf"
-	light_ball_mesh_id, light_ball_ret := sam.LoadAGLTFToAMesh(light_ball_model_path)
-	if light_ball_ret != .Success {
-		fmt.eprintln("[x] the light ball asset failed to load:", light_ball_ret)
-	}
+	light_ball_mesh_id, light_ball_ret := sam.LoadglTFMesh(light_ball_model_path)
+	createNode(&point_light_entity.node_handle)
 	point_light_entity.mesh_id = light_ball_mesh_id
 	point_light_entity.transform = linalg.matrix4_translate_f32(point_light_entity.position)
 	me.RefRetain(&sam.meshes, light_ball_mesh_id)
-	point_light_entity.node_index = me.ArrayAlloc(&sam.nodes)
-	light_ball_node := me.ArrayGet(&sam.nodes, point_light_entity.node_index)
-	light_ball_node^ = point_light_entity.node
 
 	sam.point_lights[0].light_node_id = point_light_entity.node_index
 
@@ -166,6 +164,4 @@ Update :: proc(delta : f64) {
 	point_light_entity.position = [3]f32{math.cos(light_rotate_speed * f32_global_time) * light_xz_length, 0.9, math.sin(light_rotate_speed * f32_global_time) * light_xz_length}
 	sam.point_lights[point_light_entity.point_index].position = point_light_entity.position
 	point_light_entity.transform = linalg.matrix4_translate_f32(point_light_entity.position)
-	light_ball_node := me.ArrayGet(&sam.nodes, point_light_entity.node_index)
-	light_ball_node^ = point_light_entity.node
 }

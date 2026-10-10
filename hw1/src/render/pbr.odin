@@ -23,6 +23,8 @@ PBRProgram :: struct {
 	u_base_color_factor : i32,
 	u_base_color_texture : i32,
 	u_has_base_color_texture : i32,
+	u_emissive_factor : i32,
+	u_emissive_strength : i32,
 
 	u_light_count : i32,
 	u_light_positions : i32,
@@ -94,6 +96,8 @@ DrawPBRNode :: proc(id : u32, w, h : u32) {
 		}
 		gl.Uniform4fv(program.u_base_color_factor, 1, raw_data(&mat.base_color_factor))
 		gl.Uniform1i(program.u_has_base_color_texture, has_tex)
+		gl.Uniform3fv(program.u_emissive_factor, 1, raw_data(&mat.emissive_factor))
+		gl.Uniform1f(program.u_emissive_strength, mat.emissive_strength)
 		gl.BindVertexArray(p.gl_vao_id)
 		gl.DrawElements(gl.TRIANGLES, i32(p.indices_count), gl.UNSIGNED_INT, nil)
 	}
@@ -110,6 +114,8 @@ initPBR :: proc() {
 	program.u_base_color_factor = gl.GetUniformLocation(program.program, cstring("u_base_color_factor"))
 	program.u_base_color_texture = gl.GetUniformLocation(program.program, cstring("u_base_color_texture"))
 	program.u_has_base_color_texture = gl.GetUniformLocation(program.program, cstring("u_has_base_color_texture"))
+	program.u_emissive_factor = gl.GetUniformLocation(program.program, cstring("u_emissive_factor"))
+	program.u_emissive_strength = gl.GetUniformLocation(program.program, cstring("u_emissive_strength"))
 	program.u_camera_transform = gl.GetUniformLocation(program.program, cstring("u_camera_transform"))
 	program.u_shininess = gl.GetUniformLocation(program.program, cstring("u_shininess"))
 	program.u_specular_strength = gl.GetUniformLocation(program.program, cstring("u_specular_strength"))

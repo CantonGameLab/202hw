@@ -33,7 +33,7 @@ BloomState :: struct {
 
 bloom : BloomState
 
-CreateBloomLevel :: proc(level : ^BloomLevel, w, h : i32) {
+createBloomLevel :: proc(level : ^BloomLevel, w, h : i32) {
 	level.width = w
 	level.height = h
 
@@ -83,8 +83,8 @@ initBloom :: proc() {
 	for level in 0 ..< BLOOM_LEVELS {
 		w = max(w / 2, 1)
 		h = max(h / 2, 1)
-		CreateBloomLevel(&bloom.a[level], w, h)
-		CreateBloomLevel(&bloom.b[level], w, h)
+		createBloomLevel(&bloom.a[level], w, h)
+		createBloomLevel(&bloom.b[level], w, h)
 	}
 
 	gl.UseProgram(blit_program)

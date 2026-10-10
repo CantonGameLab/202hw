@@ -52,15 +52,12 @@ Material :: struct {
 	occlusion_texture : TextureView,
 	emissive_texture : TextureView,
 	emissive_factor : [3]f32,
+	emissive_strength : f32,
 
 	alpha_mode : AlphaMode,
 	alpha_cutoff : f32,
 	double_sided : b8,
 
-	// glTF's material.pbrMetallicRoughness is *optional*, and when it is omitted
-	// every default value applies; baseColorFactor and friends physically live
-	// inside it, so "is this PBR?" is not a question that can be asked.
-	// => there is no has_pbr flag.
 	using pbr : PBRMaterial,
 }
 
@@ -88,7 +85,9 @@ Mesh :: struct {
 	aabb : AABB,
 }
 
+
 Node :: struct {
+	is_static : b8,
 	mesh_id : u32,
 	transform : Transform, //Node tree actually suck. It is evil for any game developer otherwise you are A masochism
 }
