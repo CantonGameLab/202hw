@@ -9,6 +9,7 @@ import "core:strings"
 import "core:math/linalg"
 import me "../memory/"
 import sam "../scene/"
+import "core:slice"
 
 
 PBRProgram :: struct {
@@ -50,39 +51,131 @@ PBRProgram :: struct {
 
 }
 
+DrawIterm :: struct{
+	primitive_id : u32,
+	node_id : u32,
+	distance : f32,
+}
+
 program : PBRProgram
 
-DrawPBRNode :: proc(id : u32, w, h : u32) {
-	node := me.ArrayGet(&sam.nodes, id)
-	if node == nil {
-		return
-	}
-	transform := node.transform
-	mesh := me.RefGet(&sam.meshes, node.mesh_id)
-	if mesh == nil {
-		return
-	}
+solid_draw_list : [dynamic]DrawIterm
+transparent_draw_list : [dynamic]DrawIterm
 
+drawPBR :: proc(w, h : u32) {
+
+	defer clear(&solid_draw_list)
+	defer clear(&transparent_draw_list)
+	//solid pass
+	gl.UseProgram(program.program)
+
+	// Upload the proj, view matrix and camera transform
 	aspect := f32(w) / f32(h)
 	view_matrix := sam.ViewMatrix(&sam.Main_Camera)
 	proj_matrix := sam.ProjMatrix(&sam.Main_Camera, aspect)
-	gl.UseProgram(program.program)
+
 
 	gl.UniformMatrix4fv(program.m_view, 1, false, &view_matrix[0,0])
 	gl.UniformMatrix4fv(program.m_proj, 1, false, &proj_matrix[0,0])
-	gl.UniformMatrix4fv(program.m_model, 1, false, &node.transform[0,0])
-
-	m3 := linalg.matrix3_from_matrix4_f32(node.transform)
-	normal_matrix := linalg.transpose(linalg.matrix3_inverse_f32(m3))
-	gl.UniformMatrix3fv(program.m_normal, 1, false, &normal_matrix[0,0])
 	gl.UniformMatrix4fv(program.u_camera_transform, 1, false, &sam.Main_Camera.transform[0,0])
 
+	main_camera_position := [3]f32{ 
+		sam.Main_Camera.transform[0, 3], 
+		sam.Main_Camera.transform[1, 3], 
+		sam.Main_Camera.transform[2, 3],
+	}
 
-	for &p, index in mesh.primitives {
-		mat := me.RefGet(&sam.materials, p.material_id)
-		if mat == nil {
-			continue
+	main_camera_neg_z_vector := [3]f32 {
+		-sam.Main_Camera.transform[0, 2],
+		-sam.Main_Camera.transform[1, 2],
+		-sam.Main_Camera.transform[2, 2],
+	}
+
+	for index := u32(1); index <= sam.nodes.next; index += 1 {
+		if !sam.nodes.in_use[index] do continue
+		node := &sam.nodes.data[index]
+		if node == nil do continue
+		mesh := me.RefGet(&sam.meshes, node.mesh_id)
+
+		position := [3]f32{ node.transform[0, 3], node.transform[1, 3], node.transform[2, 3] }
+		
+		distance := linalg.dot(
+			position - main_camera_position,
+			main_camera_neg_z_vector,
+		)
+
+		for &p, p_index in mesh.primitives {
+			material := me.RefGet(&sam.materials, p.material_id)
+			if material == nil do continue
+
+			the_list : ^[dynamic]DrawIterm
+			if material.alpha_mode == .Opaque || material.alpha_mode == .Mask {
+				the_list = &solid_draw_list
+			} else {
+				the_list = &transparent_draw_list
+			} 
+			append(
+				the_list, 
+				DrawIterm{
+					primitive_id = u32(p_index),
+					node_id = index,
+					distance = distance,
+				},
+			)
 		}
+	}
+
+	compareDrawItermByBiggerDepth :: proc(a, b : DrawIterm) -> bool {
+		if(a.distance != b.distance) {
+			return a.distance > b.distance
+		}
+		return a.node_id < b.node_id
+	}
+
+	compareDrawItermBySmallerDepth :: proc(a, b : DrawIterm) -> bool {
+		if (a.distance != b.distance) {
+			return a.distance < b.distance
+		}
+		return a.node_id < b.node_id
+	}
+	
+	slice.sort_by(solid_draw_list[:], compareDrawItermBySmallerDepth)
+	slice.sort_by(transparent_draw_list[:], compareDrawItermByBiggerDepth)
+
+	
+	gl.DepthMask(true)
+	gl.Disable(gl.BLEND)
+
+	drawPrimitves(solid_draw_list[:])
+
+	gl.DepthMask(false)
+	defer gl.DepthMask(true)
+	gl.Enable(gl.BLEND)
+	defer gl.Disable(gl.BLEND)
+
+	drawPrimitves(transparent_draw_list[:])
+}
+
+drawPrimitves :: proc(draw_list : []DrawIterm) {
+	for &draw_iterm, index in draw_list {
+		
+		node := me.ArrayGet(&sam.nodes, draw_iterm.node_id)
+		if node == nil do continue
+		mesh := me.RefGet(&sam.meshes, node.mesh_id)
+		if mesh == nil do continue
+
+		if index == 0 || draw_list[index - 1].node_id != draw_list[index].node_id {
+			// When the index switches to a different node, we re-upload all the parameters related to the node
+			gl.UniformMatrix4fv(program.m_model, 1, false, &node.transform[0,0])
+			m3 := linalg.matrix3_from_matrix4_f32(node.transform)
+			normal_matrix := linalg.transpose(linalg.matrix3_inverse_f32(m3))
+			gl.UniformMatrix3fv(program.m_normal, 1, false, &normal_matrix[0,0])
+		}
+
+		p := &mesh.primitives[draw_iterm.primitive_id]
+		
+		mat := me.RefGet(&sam.materials, p.material_id)
+		if mat == nil do continue
 
 		has_tex : i32 = 0
 		if mat.base_color_texture.texture_id != 0 {

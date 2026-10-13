@@ -42,12 +42,7 @@ Render :: proc() {
 	RasterizeShadowMap()
 	UniformShadowMapping()
 	bindAfter()
-	for i := u32(1); i <= sam.nodes.next; i += 1 {
-		if !sam.nodes.in_use[i] {
-			continue
-		}
-		DrawPBRNode(i, w, h)
-	}
+	drawPBR(w, h)
 	resolveAfter()
 	resolveBloom()
 	BlitToFramebuffer(0, after.tex_resolved, i32(w), i32(h))

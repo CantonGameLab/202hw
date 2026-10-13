@@ -4,6 +4,7 @@ import "vendor:cgltf"
 import "core:fmt"
 import gl "vendor:OpenGL"
 import "core:strings"
+import "core:slice"
 import "vendor:stb/image"
 import "core:c"
 import "core:os"
@@ -20,22 +21,34 @@ LoadResult :: enum {
 }
 
 
-// Loads a glTF into the pools and returns the pool id of the one Mesh it built.
-// Reads the .gltf and its .bin, decodes every image the scene actually uses, and
-// copies all geometry to the GPU. Once per file, not per frame.
+// Loads a whole glTF scene into the pools and hands the caller one Node per
+// drawable glTF node. Reads the .gltf and its .bin, decodes every image the scene
+// actually uses, and copies all geometry to the GPU. Once per file, not per frame.
 //
-// One glTF file == one Mesh. A file with two or more glTF meshes is rejected, not
-// merged: each mesh carries its own node transforms and a Mesh record has nowhere
-// to put them.
+// One glTF mesh == one Mesh record, no matter how many nodes reference it: the
+// geometry is unpacked and uploaded once and the record is shared, because a Mesh
+// record already counts its references. A mesh no reachable node names is never
+// built at all, so its geometry never reaches the GPU.
 //
-// The returned id is NOT retained -- nothing inside the load owns the result, so
-// the caller retains it once itself.
+// Nodes arrive as an array of Nodes, one per node that carries a mesh. The node
+// tree is NOT preserved: each node's transform is the baked global transform
+// (parent to child), and a node that carries no mesh contributes nothing but its
+// transform to its descendants. Nodes are appended in depth-first order, so a
+// child follows its parent. The array indexes do not line up with the file's own
+// `nodes` array.
+//
+// Nothing here retains: the array is a passing value and the ids in it are
+// unheld handles, so whoever installs a node into the pools retains it once
+// itself. The caller owns the array and deletes it.
 //
 // GPU: one texture object plus a full mip chain per used image, and one
-// VAO/VBO/EBO triple per renderable node. The handles land in
+// VAO/VBO/EBO triple per primitive. The handles land in
 // Texture.gl_texture_id and Primitive.gl_vao_id / gl_vbo_id / gl_ebo_id, and the
 // loader frees the CPU-side copies as soon as they are uploaded.
-LoadglTFMesh :: proc(path : string) -> (mesh_id : u32, ret : LoadResult) {
+//
+// A failure reports itself and returns; the pools are left holding whatever the
+// load had already put there.
+LoadglTFScene :: proc(path : string, out : ^[]Node) -> (ret : LoadResult) {
 	cpath := strings.clone_to_cstring(path)
 	defer delete(cpath)
 	data, result := cgltf.parse_file(cgltf.options{},cpath)
@@ -72,9 +85,22 @@ LoadglTFMesh :: proc(path : string) -> (mesh_id : u32, ret : LoadResult) {
 		return
 	}
 
-	if len(data.meshes) != 1 {
-		fmt.eprintln("[x] glTF does not have exactly one mesh (this loader is one-glTF-one-Mesh):",
-			len(data.meshes), "meshes in", path)
+	// The default scene, which is the one the file says to show. `data.scene` stays
+	// nil when the file does not name one -- cgltf does not fall back to the first
+	// entry -- so the fallback is here.
+	if len(data.scenes) == 0 {
+		fmt.eprintln("[x] glTF has no scene, so nothing is reachable:", path)
+		ret = .ItJustFailed
+		return
+	}
+
+	scene_ := data.scene
+	if scene_ == nil {
+		scene_ = &data.scenes[0]
+	}
+
+	if len(scene_.nodes) == 0 {
+		fmt.eprintln("[x] glTF scene has no root node, so nothing is reachable:", path)
 		ret = .ItJustFailed
 		return
 	}
@@ -242,92 +268,53 @@ LoadglTFMesh :: proc(path : string) -> (mesh_id : u32, ret : LoadResult) {
 		material_ids_from_gltf_file_to_the_real_array[index] = pool_id
 	}
 
-	// Mesh pass. Primitive generation and the node walk are one pass: a Primitive
-	// comes from a node, and since they all end up in a single Mesh record, a
-	// Walks from the scene roots, not flat over data.nodes, so a node no scene
-	// references cannot take a slot.
+	// Mesh pass. One Mesh record per glTF mesh the scene can reach, and one
+	// Primitive per primitive of that mesh. Flat over data.meshes, not over the
+	// node walk, because the same mesh is one record however many nodes name it.
 
-	if len(data.scenes) == 0 {
-		fmt.eprintln("[x] glTF has no scene, so nothing is reachable:", path)
-		ret = .ItJustFailed
-		return
-	}
-	if len(data.scenes[0].nodes) == 0 {
-		fmt.eprintln("[x] glTF scene has no root node, so nothing is reachable:", path)
-		ret = .ItJustFailed
-		return
-	}
+	mesh_is_used := make([]b8, len(data.meshes))
+	mesh_ids_from_gltf_file_to_the_real_array := make([]u32, len(data.meshes))
 
-	prims := make([dynamic]Primitive)
+	defer delete(mesh_is_used)
+	defer delete(mesh_ids_from_gltf_file_to_the_real_array)
 
-	// Initialised to the inverted extremes so that the first primitive expands it
-	// into a real box with no special case. It is passed down through the recursion
-	// as an accumulator rather than stored on Primitive: the box belongs to the mesh,
-	// and the two are loaded and freed together.
-	mesh_aabb_acc : AABB
-	mesh_aabb_acc.minmax_offset_x = {max(f32), -max(f32)}
-	mesh_aabb_acc.minmax_offset_y = {max(f32), -max(f32)}
-	mesh_aabb_acc.minmax_offset_z = {max(f32), -max(f32)}
-
-	for root in data.scenes[0].nodes {
-		loadNodeRecursive(data, root, &prims, &mesh_aabb_acc, material_ids_from_gltf_file_to_the_real_array)
-	}
-
-	// Counts what a renderable scene had to produce, so a node that quietly
-	// appended nothing becomes a load failure instead of a half-built model.
-	expected_prims := 0
-	{
-		stack := make([dynamic]^cgltf.node)
-		defer delete(stack)
-
-		for r in data.scenes[0].nodes {
-			append(&stack, r)
-		}
-
-		for len(stack) > 0 {
-			n := pop(&stack)
-			if n.mesh != nil {
-				expected_prims += 1
-			}
-			for c in n.children {
-				append(&stack, c)
-			}
+	for index in 0..<len(data.meshes) {
+		if meshIsUsedByTheScene(data, &data.meshes[index]) {
+			mesh_is_used[index] = true
 		}
 	}
 
-	if len(prims) != expected_prims {
-		fmt.eprintln("[x] primitive count mismatch: expected", expected_prims, "got", len(prims), ":", path)
-		delete(prims)
+	for index in 0..<len(data.meshes) {
+		if !mesh_is_used[index] {
+			continue
+		}
+		if !buildMesh(data, &data.meshes[index], mesh_ids_from_gltf_file_to_the_real_array, material_ids_from_gltf_file_to_the_real_array) {
+			ret = .ItJustFailed
+			return
+		}
+	}
+
+	// Node walk. Parent transform into child, so each Node carries the global
+	// transform and the tree itself never leaves this proc.
+	loaded_nodes : [dynamic]Node
+	for root in scene_.nodes {
+		appendSceneNodes(data, root, &loaded_nodes, mesh_ids_from_gltf_file_to_the_real_array)
+	}
+
+	if len(loaded_nodes) == 0 {
+		fmt.eprintln("[x] the glTF scene produced no renderable node:", path)
+		delete(loaded_nodes)
 		ret = .ItJustFailed
 		return
 	}
 
-	if len(prims) == 0 {
-		fmt.eprintln("[x] the glTF scene produced no renderable primitive:", path)
-		delete(prims)
-		ret = .ItJustFailed
-		return
-	}
+	// The caller owns the array now. Handed over whole -- length equal to capacity
+	// -- because a sliced-forever array has lost the size the allocator frees it by.
+	out^ = loaded_nodes[:]
 
-	// The recursion has folded every primitive's box into this one, so it is already
-	// the mesh's box by the time the slice is complete.
-	mesh := Mesh {
-		primitives = prims[:],
-		aabb = mesh_aabb_acc,
-	}
-
-	mesh_id = me.RefLoad(&meshes, mesh)
-	if mesh_id == 0 {
-		fmt.eprintln("[x] meshes pool is full, cannot register:", path)
-		// Pool-full happens *before* ownership transfer, so this path has to release
-		// the backing array itself.
-		delete(mesh.primitives)
-		ret = .ItJustFailed
-		return
-	}
-
-	// Releases anything this file loaded that nothing ended up holding. Meshes are
-	// exempt: the returned id is legitimately unretained at this instant.
+	// Releases anything this file loaded that nothing ended up holding. The meshes
+	// the returned nodes name are still at zero references at this instant, and
+	// that is correct: the caller retains each one as it installs it.
 	for index in 0..<len(data.textures) {
 		id := texture_ids_from_gltf_file_to_the_real_array[index]
 		if id == 0 || me.Ref(&textures, id) != 0 {
@@ -352,7 +339,7 @@ LoadglTFMesh :: proc(path : string) -> (mesh_id : u32, ret : LoadResult) {
 		material_ids_from_gltf_file_to_the_real_array[index] = 0
 	}
 
-	return //So this proc is end but other may dont
+	return
 
 	readImageFromPath :: proc(path : string, preferred_channel : i32) -> (pixels : [^]byte, w, h : u32, ok : b8) {
 		encoded, err := os.read_entire_file_from_path(path, context.allocator)
@@ -396,14 +383,29 @@ LoadglTFMesh :: proc(path : string) -> (mesh_id : u32, ret : LoadResult) {
 	}
 
 	// Does a primitive this loader will actually build reference this material?
-	// Walks from the scene roots, the same set the mesh pass walks.
+	// Every mesh the scene can reach is scanned, because a material is reachable
+	// through any of them.
 	//
 	// Compares material pointers rather than using cgltf.material_index: a missing
 	// "material" key means material == nil, and that index function asserts on nil
-	// (cgltf.h:2491), which with asserts off becomes a garbage index. A pre-scan
+	// (cgltf.h:2489), which with asserts off becomes a garbage index. A pre-scan
 	// visits every entry of data.materials, so it is the one place that can meet a
 	// nil.
 	materialIsUsedByTheScene :: proc(data : ^cgltf.data, target : ^cgltf.material) -> bool {
+		for &gm in data.meshes {
+			for &gp in gm.primitives {
+				if gp.material == target {
+					return true
+				}
+			}
+		}
+
+		return false
+	}
+
+	// Is this mesh named by a node the scene can reach? A mesh nothing names is
+	// never built, so its geometry never reaches the GPU.
+	meshIsUsedByTheScene :: proc(data : ^cgltf.data, target : ^cgltf.mesh) -> bool {
 		stack := make([dynamic]^cgltf.node)
 		defer delete(stack)
 
@@ -413,12 +415,8 @@ LoadglTFMesh :: proc(path : string) -> (mesh_id : u32, ret : LoadResult) {
 
 		for len(stack) > 0 {
 			n := pop(&stack)
-			if n.mesh != nil {
-				for &gp in n.mesh.primitives {
-					if gp.material == target {
-						return true
-					}
-				}
+			if n.mesh == target {
+				return true
 			}
 			for c in n.children {
 				append(&stack, c)
@@ -427,7 +425,7 @@ LoadglTFMesh :: proc(path : string) -> (mesh_id : u32, ret : LoadResult) {
 
 		return false
 	}
-	
+
 	basename :: proc(p : string) -> string {
 		for i := len(p) - 1; i >= 0; i -= 1 {
 			if p[i] == '/' || p[i] == '\\' {
@@ -671,242 +669,325 @@ LoadglTFMesh :: proc(path : string) -> (mesh_id : u32, ret : LoadResult) {
 	// material_ids arrives as a parameter because an Odin nested proc cannot read
 	// an outer proc's locals (measured: "Undeclared name"). The table is a local of
 	// the loader regardless.
-	loadNodeRecursive :: proc(
+	appendSceneNodes :: proc(
 		data : ^cgltf.data,
-		node : ^cgltf.node,
-		prims : ^[dynamic]Primitive,
-		mesh_aabb : ^AABB,
-		material_ids : []u32,
+		root : ^cgltf.node,
+		out : ^[dynamic]Node,
+		mesh_ids : []u32,
 	) {
+		stack := make([dynamic]^cgltf.node)
+		defer delete(stack)
 
-		if node.mesh != nil {
-			gm := node.mesh
+		append(&stack, root)
 
-			if len(gm.primitives) == 0 {
-				fmt.eprintln("[x] node's mesh has no primitive at all:", string(node.name))
-				return
+		for len(stack) > 0 {
+			n := pop(&stack)
+
+			if n.mesh != nil {
+				mesh_index := cgltf.mesh_index(data, n.mesh)
+				mesh_id := mesh_ids[mesh_index]
+
+				// A mesh-carrying node always has a mesh_id: the mesh pass above
+				// refused to continue otherwise. Checked anyway, because a zero here
+				// would put an unretainable handle into the array the caller installs
+				// from.
+				if mesh_id == 0 {
+					fmt.eprintln("[x] node names a mesh that was never loaded:", string(n.name))
+					continue
+				}
+
+				// The global transform, so a child node arrives in the same space the
+				// render path already draws (it uses node.transform as m_model directly).
+				world : Transform
+				cgltf.node_transform_world(n, &world[0, 0])
+
+				// A value, not a pool slot. The node pool belongs to whoever installs
+				// these, and taking a slot here would spend one twice per node: once
+				// for this passing record and once for the real one the installer
+				// creates, leaving an unreachable node drawing the same mesh.
+				append(out, Node {
+					mesh_id = mesh_id,
+					transform = world,
+				})
 			}
 
-			// One glTF mesh does not imply one primitive. More than one would need
-			// per-primitive world transforms, which a flat Mesh record cannot hold.
-			if len(gm.primitives) != 1 {
-				fmt.eprintln("[x] glTF mesh has", len(gm.primitives),
-					"primitives; exactly 1 is supported (one glTF == one Mesh == one Primitive per node)")
-				return
+			for child in n.children {
+				append(&stack, child)
 			}
+		}
+	}
 
-			gp := &gm.primitives[0]
+	// Builds one Primitive: attributes staged, indices widened, VAO/VBO/EBO created
+	// and the CPU copies released. Returns false on anything it cannot build, having
+	// already reported why.
+	buildMeshPrimitive :: proc(
+		data : ^cgltf.data,
+		name : string,
+		gp : ^cgltf.primitive,
+		material_ids : []u32,
+		p : ^Primitive,
+		mesh_aabb : ^AABB,
+	) -> bool {
 
-			// The spec allows primitive.material to be absent and falls back to a
-			// Default Material (3.9.6). Deliberately not implemented: a missing
-			// material is a defect in the data, and it has to blow up here rather
-			// than reach a shipped build.
-			if gp.material == nil {
-				fmt.eprintln("[x] primitive has no material (spec Default Material is deliberately not implemented here):", string(node.name))
-				return
+		// The spec allows primitive.material to be absent and falls back to a
+		// Default Material (3.9.6). Deliberately not implemented: a missing
+		// material is a defect in the data, and it has to blow up here rather
+		// than reach a shipped build.
+		if gp.material == nil {
+			fmt.eprintln("[x] primitive has no material (spec Default Material is deliberately not implemented here):", name)
+			return false
+		}
+
+		// Only triangle lists: the draw call hardcodes GL_TRIANGLES, so a strip or
+		// fan would be drawn wrong with nothing reported.
+		if gp.type != .triangles {
+			fmt.eprintln("[x] unsupported primitive topology (triangles only):", gp.type, name)
+			return false
+		}
+
+		// Vertex count comes from POSITION.count: the spec requires every
+		// attribute of a primitive to agree on it, so a mismatch is broken data,
+		// not a case to accommodate.
+		position_accessor : ^cgltf.accessor
+		for a in gp.attributes {
+			if a.type == .position {
+				position_accessor = a.data
 			}
+		}
 
-			// Only triangle lists: the draw call hardcodes GL_TRIANGLES, so a strip or
-			// fan would be drawn wrong with nothing reported.
-			if gp.type != .triangles {
-				fmt.eprintln("[x] unsupported primitive topology (triangles only):", gp.type, string(node.name))
-				return
-			}
+		if position_accessor == nil {
+			fmt.eprintln("[x] primitive has no POSITION:", name)
+			return false
+		}
 
-			// Vertex count comes from POSITION.count: the spec requires every
-			// attribute of a primitive to agree on it, so a mismatch is broken data,
-			// not a case to accommodate.
-			position_accessor : ^cgltf.accessor
-			for a in gp.attributes {
-				if a.type == .position {
-					position_accessor = a.data
+		vertex_count := position_accessor.count
+
+		if vertex_count == 0 {
+			fmt.eprintln("[x] primitive has 0 vertices:", name)
+			return false
+		}
+
+		vtx : []Vertex = make([]Vertex, vertex_count)
+		idx : []u32
+
+		for i in 0..<vertex_count {
+			vtx[i] = Vertex{}
+		}
+
+		for a in gp.attributes {
+			#partial switch a.type {
+			case .position:
+				if !flattenAccessorToVertexAttribute(&vtx[0].position[0], a.data, vertex_count, 3) {
+					fmt.eprintln("[x] attribute flatten failed POSITION:", name)
+					delete(vtx)
+					return false
+				}
+				// Read or derive this primitive's local box here, while the staged
+				// positions are still alive, and fold it into the mesh's. Every
+				// failure exit that deletes vtx sits below this point, so reaching it
+				// means the positions are known good.
+				prim_min, prim_max : [3]f32
+				if !flattenAccessorToAABB(a.data, vtx, &prim_min, &prim_max) {
+					fmt.eprintln("[x] could not determine the bounding box:", name)
+					delete(vtx)
+					return false
+				}
+				mesh_aabb.minmax_offset_x = {
+					min(mesh_aabb.minmax_offset_x[0], prim_min.x),
+					max(mesh_aabb.minmax_offset_x[1], prim_max.x),
+				}
+				mesh_aabb.minmax_offset_y = {
+					min(mesh_aabb.minmax_offset_y[0], prim_min.y),
+					max(mesh_aabb.minmax_offset_y[1], prim_max.y),
+				}
+				mesh_aabb.minmax_offset_z = {
+					min(mesh_aabb.minmax_offset_z[0], prim_min.z),
+					max(mesh_aabb.minmax_offset_z[1], prim_max.z),
+				}
+			case .normal:
+				if !flattenAccessorToVertexAttribute(&vtx[0].normal[0], a.data, vertex_count, 3) {
+					fmt.eprintln("[x] attribute flatten failed NORMAL:", name)
+					delete(vtx)
+					return false
+				}
+			case .tangent:
+				if !flattenAccessorToVertexAttribute(&vtx[0].tangent[0], a.data, vertex_count, 4) {
+					fmt.eprintln("[x] attribute flatten failed TANGENT:", name)
+					delete(vtx)
+					return false
+				}
+			case .texcoord:
+				// Vertex holds two UV sets. TEXCOORD_2 and up are refused rather
+				// than dropped, because dropping means the shader samples all-zero
+				// UVs and the surface comes out flat coloured.
+				if a.index == 0 {
+					if !flattenAccessorToVertexAttribute(&vtx[0].uv0[0], a.data, vertex_count, 2) {
+						fmt.eprintln("[x] attribute flatten failed TEXCOORD_0:", name)
+						delete(vtx)
+						return false
+					}
+				} else if a.index == 1 {
+					if !flattenAccessorToVertexAttribute(&vtx[0].uv1[0], a.data, vertex_count, 2) {
+						fmt.eprintln("[x] attribute flatten failed TEXCOORD_1:", name)
+						delete(vtx)
+						return false
+					}
+				} else {
+					fmt.eprintln("[x] TEXCOORD_", a.index, " out of range (Vertex holds only two UV sets):", name)
+					delete(vtx)
+					return false
 				}
 			}
-
-			if position_accessor == nil {
-				fmt.eprintln("[x] primitive has no POSITION:", string(node.name))
-				return
-			}
-
-			vertex_count := position_accessor.count
-
-			if vertex_count == 0 {
-				fmt.eprintln("[x] primitive has 0 vertices:", string(node.name))
-				return
-			}
-
-			vtx : []Vertex = make([]Vertex, vertex_count)
-			idx : []u32
-
-			for i in 0..<vertex_count {
-				vtx[i] = Vertex{}
-			}
-
-			for a in gp.attributes {
-				#partial switch a.type {
-				case .position:
-					if !flattenAccessorToVertexAttribute(&vtx[0].position[0], a.data, vertex_count, 3) {
-						fmt.eprintln("[x] attribute flatten failed POSITION:", string(node.name))
-						delete(vtx)
-						return
-					}
-					// Read or derive this primitive's local box here, while the staged
-					// positions are still alive, and fold it into the mesh's. Every
-					// failure exit that deletes vtx sits below this point, so reaching it
-					// means the positions are known good.
-					prim_min, prim_max : [3]f32
-					if !flattenAccessorToAABB(a.data, vtx, &prim_min, &prim_max) {
-						fmt.eprintln("[x] could not determine the bounding box:", string(node.name))
-						delete(vtx)
-						return
-					}
-					mesh_aabb.minmax_offset_x = {
-						min(mesh_aabb.minmax_offset_x[0], prim_min.x),
-						max(mesh_aabb.minmax_offset_x[1], prim_max.x),
-					}
-					mesh_aabb.minmax_offset_y = {
-						min(mesh_aabb.minmax_offset_y[0], prim_min.y),
-						max(mesh_aabb.minmax_offset_y[1], prim_max.y),
-					}
-					mesh_aabb.minmax_offset_z = {
-						min(mesh_aabb.minmax_offset_z[0], prim_min.z),
-						max(mesh_aabb.minmax_offset_z[1], prim_max.z),
-					}
-				case .normal:
-					if !flattenAccessorToVertexAttribute(&vtx[0].normal[0], a.data, vertex_count, 3) {
-						fmt.eprintln("[x] attribute flatten failed NORMAL:", string(node.name))
-						delete(vtx)
-						return
-					}
-				case .tangent:
-					if !flattenAccessorToVertexAttribute(&vtx[0].tangent[0], a.data, vertex_count, 4) {
-						fmt.eprintln("[x] attribute flatten failed TANGENT:", string(node.name))
-						delete(vtx)
-						return
-					}
-				case .texcoord:
-					// Vertex holds two UV sets. TEXCOORD_2 and up are refused rather
-					// than dropped, because dropping means the shader samples all-zero
-					// UVs and the surface comes out flat coloured.
-					if a.index == 0 {
-						if !flattenAccessorToVertexAttribute(&vtx[0].uv0[0], a.data, vertex_count, 2) {
-							fmt.eprintln("[x] attribute flatten failed TEXCOORD_0:", string(node.name))
-							delete(vtx)
-							return
-						}
-					} else if a.index == 1 {
-						if !flattenAccessorToVertexAttribute(&vtx[0].uv1[0], a.data, vertex_count, 2) {
-							fmt.eprintln("[x] attribute flatten failed TEXCOORD_1:", string(node.name))
-							delete(vtx)
-							return
-						}
-					} else {
-						fmt.eprintln("[x] TEXCOORD_", a.index, " out of range (Vertex holds only two UV sets):", string(node.name))
-						delete(vtx)
-						return
-					}
-				}
-			}
+		}
 
 
-			if gp.indices == nil {
-				fmt.eprintln("[x] primitive has no indices (only indexed draw is supported here):", string(node.name))
-				delete(vtx)
-				return
-			}
-			// Widen to 4-byte indices, so one UNSIGNED_INT draw path covers every
-			// asset with no branching on the source component type.
-			//
-			// Both calls are checked: the first is cgltf's "query mode" (out == nil),
-			// which returns the accessor count without validating anything, and the
-			// second is the real conversion, which returns 0 on a sparse accessor or
-			// an over-wide component. An unchecked conversion draws an all-zero index
-			// buffer -- every triangle being vertex #0 -- with no error.
-			if cgltf.accessor_unpack_indices(gp.indices, nil, 4, 0) != gp.indices.count {
-				fmt.eprintln("[x] accessor_unpack_indices query failed:", string(node.name))
-				delete(vtx)
-				return
-			}
+		if gp.indices == nil {
+			fmt.eprintln("[x] primitive has no indices (only indexed draw is supported here):", name)
+			delete(vtx)
+			return false
+		}
+		// Widen to 4-byte indices, so one UNSIGNED_INT draw path covers every
+		// asset with no branching on the source component type.
+		//
+		// Both calls are checked: the first is cgltf's "query mode" (out == nil),
+		// which returns the accessor count without validating anything, and the
+		// second is the real conversion, which returns 0 on a sparse accessor or
+		// an over-wide component. An unchecked conversion draws an all-zero index
+		// buffer -- every triangle being vertex #0 -- with no error.
+		if cgltf.accessor_unpack_indices(gp.indices, nil, 4, 0) != gp.indices.count {
+			fmt.eprintln("[x] accessor_unpack_indices query failed:", name)
+			delete(vtx)
+			return false
+		}
 
-			index_count := gp.indices.count
+		index_count := gp.indices.count
 
-			if index_count == 0 || index_count % 3 != 0 {
-				fmt.eprintln("[x] index count is not a multiple of 3 (triangle list):", index_count, string(node.name))
-				delete(vtx)
-				return
-			}
+		if index_count == 0 || index_count % 3 != 0 {
+			fmt.eprintln("[x] index count is not a multiple of 3 (triangle list):", index_count, name)
+			delete(vtx)
+			return false
+		}
 
-			idx = make([]u32, index_count)
+		idx = make([]u32, index_count)
 
-			if cgltf.accessor_unpack_indices(gp.indices, rawptr(&idx[0]), 4, index_count) != index_count {
-				fmt.eprintln("[x] accessor_unpack_indices failed (sparse or over-wide component):", string(node.name))
-				delete(vtx)
-				delete(idx)
-				return
-			}
-
-			material_id := material_ids[cgltf.material_index(data, gp.material)]
-
-			if material_id == 0 {
-				fmt.eprintln("[x] primitive points at a material that was never loaded:", string(node.name))
-				delete(vtx)
-				delete(idx)
-				return
-			}
-
-			p := Primitive {
-				indices_count = u32(index_count),
-				material_id = material_id,
-			}
-
-			// One retain per primitive: each primitive is its own edge to its material,
-			// which is what makes releasing per primitive the exact inverse.
-			if !me.RefRetain(&materials, material_id) {
-				fmt.eprintln("[x] failed to retain material while building a primitive, material pool id:", material_id)
-				delete(vtx)
-				delete(idx)
-				return
-			}
-
-			gl.GenVertexArrays(1, &p.gl_vao_id)
-			gl.GenBuffers(1, &p.gl_vbo_id)
-			gl.GenBuffers(1, &p.gl_ebo_id)
-
-			gl.BindVertexArray(p.gl_vao_id)
-
-			gl.BindBuffer(gl.ARRAY_BUFFER, p.gl_vbo_id)
-			gl.BufferData(gl.ARRAY_BUFFER, len(vtx) * size_of(Vertex), raw_data(vtx), gl.STATIC_DRAW)
-
-			gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, p.gl_ebo_id)
-			gl.BufferData(gl.ELEMENT_ARRAY_BUFFER, len(idx) * size_of(u32), raw_data(idx), gl.STATIC_DRAW)
-
-			// Offsets come from Vertex's field offsets; never hand-written.
-			vertexAttribOffset(0, 3, offset_of(Vertex, position))
-			vertexAttribOffset(1, 3, offset_of(Vertex, normal))
-			vertexAttribOffset(2, 4, offset_of(Vertex, tangent))
-			vertexAttribOffset(3, 2, offset_of(Vertex, uv0))
-			vertexAttribOffset(4, 2, offset_of(Vertex, uv1))
-
-			gl.BindVertexArray(0)
-
-			// A static VBO is never re-uploaded, so the CPU copies have no consumer
-			// once the upload above returns. The record keeps only the three GL names.
+		if cgltf.accessor_unpack_indices(gp.indices, rawptr(&idx[0]), 4, index_count) != index_count {
+			fmt.eprintln("[x] accessor_unpack_indices failed (sparse or over-wide component):", name)
 			delete(vtx)
 			delete(idx)
-
-			p.vertexs = nil
-			p.indices = nil
-
-			append(prims, p)
+			return false
 		}
 
-		if len(node.children) == 0 {
-			return
+		material_id := material_ids[cgltf.material_index(data, gp.material)]
+
+		if material_id == 0 {
+			fmt.eprintln("[x] primitive points at a material that was never loaded:", name)
+			delete(vtx)
+			delete(idx)
+			return false
 		}
 
-		for child in node.children {
-			loadNodeRecursive(data, child, prims, mesh_aabb, material_ids)
+		p.indices_count = u32(index_count)
+		p.material_id = material_id
+
+		// One retain per primitive: each primitive is its own edge to its material,
+		// which is what makes releasing per primitive the exact inverse.
+		if !me.RefRetain(&materials, material_id) {
+			fmt.eprintln("[x] failed to retain material while building a primitive, material pool id:", material_id)
+			delete(vtx)
+			delete(idx)
+			return false
 		}
+
+		gl.GenVertexArrays(1, &p.gl_vao_id)
+		gl.GenBuffers(1, &p.gl_vbo_id)
+		gl.GenBuffers(1, &p.gl_ebo_id)
+
+		gl.BindVertexArray(p.gl_vao_id)
+
+		gl.BindBuffer(gl.ARRAY_BUFFER, p.gl_vbo_id)
+		gl.BufferData(gl.ARRAY_BUFFER, len(vtx) * size_of(Vertex), raw_data(vtx), gl.STATIC_DRAW)
+
+		gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, p.gl_ebo_id)
+		gl.BufferData(gl.ELEMENT_ARRAY_BUFFER, len(idx) * size_of(u32), raw_data(idx), gl.STATIC_DRAW)
+
+		// Offsets come from Vertex's field offsets; never hand-written.
+		vertexAttribOffset(0, 3, offset_of(Vertex, position))
+		vertexAttribOffset(1, 3, offset_of(Vertex, normal))
+		vertexAttribOffset(2, 4, offset_of(Vertex, tangent))
+		vertexAttribOffset(3, 2, offset_of(Vertex, uv0))
+		vertexAttribOffset(4, 2, offset_of(Vertex, uv1))
+
+		gl.BindVertexArray(0)
+
+		// A static VBO is never re-uploaded, so the CPU copies have no consumer
+		// once the upload above returns. The record keeps only the three GL names.
+		delete(vtx)
+		delete(idx)
+
+		p.vertexs = nil
+		p.indices = nil
+
+		return true
+	}
+
+	// Builds one Mesh record from one glTF mesh: every primitive of that mesh, in
+	// order, and no node transform anywhere -- a Mesh record holds geometry in the
+	// mesh's own space and each node supplies its own transform.
+	//
+	// The box is deliberately the mesh-local box: turning it into a world box is
+	// GetSceneAABB's job, which transforms all eight corners by the node's own
+	// transform. Folding a node transform in here would apply it twice.
+	buildMesh :: proc(
+		data : ^cgltf.data,
+		gm : ^cgltf.mesh,
+		mesh_ids : []u32,
+		material_ids : []u32,
+	) -> bool {
+		if len(gm.primitives) == 0 {
+			fmt.eprintln("[x] glTF mesh has no primitive at all:", string(gm.name))
+			return false
+		}
+
+		// Seeded to the inverted extremes so the first primitive expands it into a
+		// real box with no special case.
+		mesh_aabb : AABB
+		mesh_aabb.minmax_offset_x = {max(f32), -max(f32)}
+		mesh_aabb.minmax_offset_y = {max(f32), -max(f32)}
+		mesh_aabb.minmax_offset_z = {max(f32), -max(f32)}
+
+		prims := make([dynamic]Primitive)
+		defer delete(prims)
+
+		for &gp in gm.primitives {
+			p : Primitive
+			if !buildMeshPrimitive(data, string(gm.name), &gp, material_ids, &p, &mesh_aabb) {
+				return false
+			}
+			append(&prims, p)
+		}
+
+		// The dynamic array's own storage becomes the record's storage, so it must
+		// NOT be freed on the way out: a slice is a pointer, and the pool entry
+		// outlives this proc. Only a failed RefLoad frees it, below.
+		mesh := Mesh {
+			primitives = prims[:],
+			aabb = mesh_aabb,
+		}
+
+		mesh_id := me.RefLoad(&meshes, mesh)
+		if mesh_id == 0 {
+			fmt.eprintln("[x] meshes pool is full, cannot register:", string(gm.name))
+			delete(mesh.primitives)
+			return false
+		}
+
+		mesh_ids[cgltf.mesh_index(data, gm)] = mesh_id
+
+		// Ownership of the primitive array went into the pool entry, so the deferred
+		// delete above must not take it back.
+		prims = nil
+
+		return true
 	}
 }
 

@@ -59,22 +59,34 @@ createNode :: proc(node_handle : ^NodeHandle) {
 InitScene :: proc() {
 	
 	marble_bust_model_path := "resource/assets/marble_bust_model/marble_bust_01_4k.gltf"
-	mesh_id_, ret := sam.LoadglTFMesh(marble_bust_model_path)
+	bust_nodes : []sam.Node
+	bust_ret := sam.LoadglTFScene(marble_bust_model_path, &bust_nodes)
+	if bust_ret != .Success {
+		fmt.eprintln("[x] the marble bust scene did not load:", bust_ret)
+		return
+	}
 
 	createNode(&marble_bust_entity.node_handle)
 
-	marble_bust_entity.mesh_id = mesh_id_
-	marble_bust_entity.transform = 1
-	me.RefRetain(&sam.meshes, mesh_id_)
+	marble_bust_entity.mesh_id = bust_nodes[0].mesh_id
+	marble_bust_entity.transform = bust_nodes[0].transform
+	me.RefRetain(&sam.meshes, marble_bust_entity.mesh_id)
+	delete(bust_nodes)
 
 	floor_model_path := "resource/assets/stone_floor/stone_floor.gltf"
-	floor_mesh_id, floor_ret := sam.LoadglTFMesh(floor_model_path)
-	
+	floor_nodes : []sam.Node
+	floor_ret := sam.LoadglTFScene(floor_model_path, &floor_nodes)
+	if floor_ret != .Success {
+		fmt.eprintln("[x] the floor scene did not load:", floor_ret)
+		return
+	}
+
 	createNode(&floor_entity.node_handle)
 
-	floor_entity.mesh_id = floor_mesh_id
-	floor_entity.transform = 1
-	me.RefRetain(&sam.meshes, floor_mesh_id)
+	floor_entity.mesh_id = floor_nodes[0].mesh_id
+	floor_entity.transform = floor_nodes[0].transform
+	me.RefRetain(&sam.meshes, floor_entity.mesh_id)
+	delete(floor_nodes)
 
 
 	target := linalg.Vector3f32{0.0, 0.23, 0.0}
@@ -104,11 +116,18 @@ InitScene :: proc() {
 	point_light_entity.point_index = 0
 
 	light_ball_model_path := "resource/assets/light_ball/light_ball.gltf"
-	light_ball_mesh_id, light_ball_ret := sam.LoadglTFMesh(light_ball_model_path)
+	light_ball_nodes : []sam.Node
+	light_ball_ret := sam.LoadglTFScene(light_ball_model_path, &light_ball_nodes)
+	if light_ball_ret != .Success {
+		fmt.eprintln("[x] the light ball scene did not load:", light_ball_ret)
+		return
+	}
+
 	createNode(&point_light_entity.node_handle)
-	point_light_entity.mesh_id = light_ball_mesh_id
+	point_light_entity.mesh_id = light_ball_nodes[0].mesh_id
 	point_light_entity.transform = linalg.matrix4_translate_f32(point_light_entity.position)
-	me.RefRetain(&sam.meshes, light_ball_mesh_id)
+	me.RefRetain(&sam.meshes, point_light_entity.mesh_id)
+	delete(light_ball_nodes)
 
 	sam.point_lights[0].light_node_id = point_light_entity.node_index
 
